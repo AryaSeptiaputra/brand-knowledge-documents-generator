@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Generating documents</title>
+<!--
+  Static reference export of screen "3 · Generating" from the UI/UX canvas
+  (Brand Knowledge Document Generator, skeleton frames).
+  Purpose: exact layout, colors, type sizes, spacing and accessible markup for implementing
+  the React + Tailwind frontend. This is NOT production code: interactions are removed,
+  and bracketed values such as [n] or [BRAND NAME] are placeholders. Design tokens: ../tokens.md
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body { margin: 0; }
+a { color: #2f5fa8; }
+a:hover { color: #1f4580; }
+</style>
+</head>
+<body>
+<div style="min-height: 960px; background: #f4f4f2; color: #262624; font-family: 'IBM Plex Sans', system-ui, sans-serif; display: flex; flex-direction: column;">
+  <header style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 32px; background: #ffffff; border-bottom: 1px solid #d6d6d2;">
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <div style="width: 28px; height: 28px; border-radius: 6px; background: #bdbdb8;"></div>
+      <span style="font-weight: 600; font-size: 15px;">Brand Knowledge Document Generator</span>
+    </div>
+    <ol style="display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0px; padding: 0px; font-size: 13px;">
+      <li style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #e6e6e2; color: #4a4a46;"><span style="font-weight: 600;">1</span>Write data</li>
+      <li style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #e6e6e2; color: #4a4a46;"><span style="font-weight: 600;">2</span>Review grouping</li>
+      <li style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #262624; color: #ffffff;"><span style="font-weight: 600;">3</span>Preview &amp; download</li>
+    </ol>
+  </header>
+  <main style="flex-grow: 1; width: 100%; box-sizing: border-box; padding: 64px 24px; display: flex; justify-content: center; align-items: flex-start;">
+    <section aria-live="polite" style="width: 100%; max-width: 560px; background: #ffffff; border: 1px solid #d6d6d2; border-radius: 12px; padding: 28px; display: flex; flex-direction: column; gap: 22px;">
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <h1 style="margin: 0px; font-size: 22px; font-weight: 600;">Generating documents</h1>
+        <p style="margin: 0px; font-size: 14px; color: #55554f;">Each section is written from your data, then checked against it. This can take a few minutes.</p>
+      </div>
+      <ul style="margin: 0px; padding: 0px; list-style: none; display: flex; flex-direction: column; gap: 16px;">
+          <li style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px;">
+              <span style="display: flex; align-items: center; gap: 10px;">
+                <span style="width: 16px; height: 20px; border-radius: 3px; background: #d6d6d2;"></span>
+                <span style="font-weight: 500;">Policy</span>
+              </span>
+              <span style="font-size: 13px; color: #4a4a46;">Done</span>
+            </div>
+            <div role="progressbar" aria-label="Policy progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" style="height: 8px; border-radius: 999px; background: #ededea; overflow: hidden;">
+              <div style="height: 100%; width: 100%; border-radius: 999px; background: #262624;"></div>
+            </div>
+          </li>
+          <li style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px;">
+              <span style="display: flex; align-items: center; gap: 10px;">
+                <span style="width: 16px; height: 20px; border-radius: 3px; background: #d6d6d2;"></span>
+                <span style="font-weight: 500;">Guide</span>
+              </span>
+              <span style="font-size: 13px; color: #4a4a46;">Composing sections…</span>
+            </div>
+            <div role="progressbar" aria-label="Guide progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="80" style="height: 8px; border-radius: 999px; background: #ededea; overflow: hidden;">
+              <div style="height: 100%; width: 80%; border-radius: 999px; background: #262624;"></div>
+            </div>
+          </li>
+          <li style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px;">
+              <span style="display: flex; align-items: center; gap: 10px;">
+                <span style="width: 16px; height: 20px; border-radius: 3px; background: #d6d6d2;"></span>
+                <span style="font-weight: 500;">Product Knowledge</span>
+              </span>
+              <span style="font-size: 13px; color: #4a4a46;">Waiting</span>
+            </div>
+            <div role="progressbar" aria-label="Product Knowledge progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="height: 8px; border-radius: 999px; background: #ededea; overflow: hidden;">
+              <div style="height: 100%; width: 0%; border-radius: 999px; background: #262624;"></div>
+            </div>
+          </li>
+      </ul>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px;">
+          <span style="padding: 4px 10px; border-radius: 999px; background: #262624; color: #ffffff;">Compose</span>
+          <span style="padding: 4px 10px; border-radius: 999px; background: #ededea; color: #3a3a36;">Check content</span>
+          <span style="padding: 4px 10px; border-radius: 999px; background: #ededea; color: #3a3a36;">Render preview</span>
+      </div>
+    </section>
+  </main></div>
+</body>
+</html>
