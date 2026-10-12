@@ -1,0 +1,11 @@
+You are writing customer-facing Indonesian brand documentation.
+Brand: {{ brand_name }}
+Document type and purpose: {{ document_type }}
+Section heading: {{ heading }}
+Facts (paths must be copied exactly):
+{% for fact in facts %}{{ fact.path }} = {{ fact.value }}
+{% endfor %}
+Write one to three short formal-friendly paragraphs addressing the reader as "Anda".
+Use only facts shown above. Do not add steps, conditions, numbers, names, or promises.
+Do not repeat tables or lists. Return ComposedSection JSON with the exact heading and paragraphs;
+each paragraph must include source_paths copied from the supplied fact paths.

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>{{ document.title }}</title>
+  <meta name="author" content="{{ document.brand_name }}">
+  <meta name="description" content="{{ document.document_type.value }}">
+  <meta name="dcterms.created" content="{{ document.generated_at.isoformat() }}">
+  <style>
+    body { font-family: sans-serif; color: #20242a; margin: 36px auto; max-width: 820px; line-height: 1.55; }
+    header { border-bottom: 1px solid #d7dce2; padding-bottom: 16px; margin-bottom: 24px; }
+    header img { max-height: 64px; max-width: 180px; object-fit: contain; }
+    body.pdf-mode header .brand-logo { position: running(brand-logo); }
+    h1 { margin: 0; font-size: 26px; } h2 { margin-top: 28px; font-size: 20px; }
+    h3 { margin-top: 18px; font-size: 16px; } table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+    th, td { border: 1px solid #cbd1d8; padding: 7px 9px; text-align: left; }
+    .source { color: #66717f; font-size: 11px; } .suggestions { display: none; }
+    @page { margin: 18mm; @top-right { content: element(brand-logo); } }
+  </style>
+</head>
+<body class="{% if not show_sources %}pdf-mode{% endif %}">
+<header>{% if logo_data %}<div class="brand-logo"><img alt="{{ document.brand_name }} logo" src="data:{{ logo.media_type }};base64,{{ logo_data }}"></div>{% endif %}
+  <h1>{{ document.title }}</h1><p>{{ document.brand_name }}</p>
+</header>
+{% for section in document.sections %}
+<section><h2>{{ section.heading }}</h2>
+  {% for paragraph in section.paragraphs %}<p>{{ paragraph.text }}</p>
+    {% if show_sources and paragraph.origin.value == 'LLM' %}<div class="source">{{ paragraph.sources | map(attribute='fact_path') | join(', ') }}</div>{% endif %}
+  {% endfor %}
+  {% for block in section_blocks[section.order] %}
+    {% if block.kind == 'table' %}
+      <h3>{{ block.caption | humanize_key }}</h3><table><thead><tr><th>{{ block.row_heading }}</th>{% for heading in block.headings %}<th>{{ heading | humanize_key }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for row in block.rows %}<tr><th>{{ row.label }}</th>{% for value in row["values"] %}<td>{{ value }}</td>{% endfor %}</tr>{% endfor %}</tbody></table>
+    {% elif block.kind == 'list' %}
+      <h3>{{ block.label | humanize_key }}</h3><ul>{% for item in block["items"] %}<li>{{ item }}</li>{% endfor %}</ul>
+    {% elif block.kind == 'definition' %}
+      <h3>{{ block.label | humanize_key }}</h3><dl>{% for item in block.definitions %}<dt>{{ item.label | humanize_key }}</dt><dd>{{ item.value }}</dd>{% endfor %}</dl>
+    {% elif document.document_type.value == 'PRODUCT_KNOWLEDGE' %}
+      <h3>{{ block.label | humanize_key }}</h3><p>{{ block.value }}</p>
+    {% else %}<p><strong>{{ block.label | humanize_key }}:</strong> {{ block.value }}</p>{% endif %}
+    {% if show_sources %}<div class="source">{{ block.source_label }}</div>{% endif %}
+  {% endfor %}
+</section>
+{% endfor %}
+</body>
+</html>
