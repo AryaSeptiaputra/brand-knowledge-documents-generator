@@ -1,14 +1,19 @@
 """Shared YAML fixture for service and endpoint tests."""
 
 import base64
-from io import BytesIO
 
 import pytest
-from fastapi import UploadFile
 
 from brand_docs.domain.models import BrandData
 from brand_docs.services.extractor import FactExtractor
 from brand_docs.services.validator import DataValidator
+
+
+def build_validator(
+    max_logo_bytes: int = 100, max_yaml_bytes: int = 1024 * 1024, max_yaml_nodes: int = 20_000
+) -> DataValidator:
+    return DataValidator(max_logo_bytes, max_yaml_bytes, max_yaml_nodes)
+
 
 KAOS_RIMBA_YAML = """brand: Kaos Rimba
 retur:
@@ -29,7 +34,7 @@ product:
 
 @pytest.fixture
 def brand_data() -> BrandData:
-    validator = DataValidator(max_logo_bytes=1024 * 1024)
+    validator = build_validator(max_logo_bytes=1024 * 1024)
     result = validator.validate(KAOS_RIMBA_YAML)
     assert result.data is not None
     return FactExtractor().extract(result.data, KAOS_RIMBA_YAML)
@@ -46,23 +51,21 @@ def broken_yaml() -> str:
 
 
 @pytest.fixture
-def valid_png_logo() -> UploadFile:
-    content = base64.b64decode(
+def valid_png_logo() -> bytes:
+    return base64.b64decode(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ"
         "AAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=="
     )
-    return UploadFile(filename="mark.png", file=BytesIO(content))
 
 
 @pytest.fixture
-def valid_svg_logo() -> UploadFile:
-    content = b'<svg xmlns="http://www.w3.org/2000/svg"><circle r="1" /></svg>'
-    return UploadFile(filename="mark.svg", file=BytesIO(content))
+def valid_svg_logo() -> bytes:
+    return b'<svg xmlns="http://www.w3.org/2000/svg"><circle r="1" /></svg>'
 
 
 @pytest.fixture
-def valid_jpeg_logo() -> UploadFile:
-    content = base64.b64decode(
+def valid_jpeg_logo() -> bytes:
+    return base64.b64decode(
         "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a"
         "HBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIy"
         "MjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIA"
@@ -76,9 +79,8 @@ def valid_jpeg_logo() -> UploadFile:
         "uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD3+iii"
         "gD//2Q=="
     )
-    return UploadFile(filename="mark.jpg", file=BytesIO(content))
 
 
 @pytest.fixture
-def fake_logo_file() -> UploadFile:
-    return UploadFile(filename="fake.png", file=BytesIO(b"not-an-image"))
+def fake_logo_file() -> bytes:
+    return b"not-an-image"

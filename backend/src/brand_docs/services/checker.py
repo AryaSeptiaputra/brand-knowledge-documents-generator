@@ -1,19 +1,11 @@
-"""Check LLM prose against facts and ensure every mapped fact is represented."""
+"""Check LLM prose against the facts of its section."""
 
 import re
 from decimal import Decimal, InvalidOperation
 
 from brand_docs.domain.enums import ParagraphOrigin
-from brand_docs.domain.models import (
-    CheckResult,
-    Document,
-    Fact,
-    Paragraph,
-    Section,
-    SourceReference,
-)
+from brand_docs.domain.models import CheckResult, Document, Fact, Paragraph, Section
 from brand_docs.utils.logger import setup_logger
-from brand_docs.utils.text import format_fact_sentence
 
 logger = setup_logger(__name__)
 # Splits prose into Unicode words with connectors, such as "Élodie", "J&T", and "24s".
@@ -21,16 +13,25 @@ PROPER_TERM_PATTERN = re.compile(r"\b\w+(?:[&.-]\w+)*\b")
 # Captures the first token after a sentence boundary for grammatical capitalization checks.
 SENTENCE_START_PATTERN = re.compile(r"(?:^|[.!?]\s+)(\w+(?:[&.-]\w+)*)")
 # Identifies number shorthand already normalized by the numeric checker, such as "3jt" or "4rb".
-NUMBER_UNIT_PATTERN = re.compile(
-    r"\d+(?:[.,]\d+)*(?:ribu|rb|k|juta|jt)", re.IGNORECASE
-)
+NUMBER_UNIT_PATTERN = re.compile(r"\d+(?:[.,]\d+)*(?:ribu|rb|k|juta|jt)", re.IGNORECASE)
+
+
 class ContentChecker:
-    """Replace unsupported model prose and measure its fact coverage."""
+    """Drop unsupported model prose and measure its fact coverage."""
 
     ALLOWED_TERMS: frozenset[str] = frozenset(
         {
-            "Anda", "Rp", "Kebijakan", "Panduan", "Product", "Knowledge", "Policy", "Guide",
-            "dan", "Yang", "Untuk",
+            "Anda",
+            "Rp",
+            "Kebijakan",
+            "Panduan",
+            "Product",
+            "Knowledge",
+            "Policy",
+            "Guide",
+            "dan",
+            "Yang",
+            "Untuk",
         }
     )
 
@@ -120,20 +121,20 @@ class ContentChecker:
 
     @staticmethod
     def _proper_terms_in(text: str) -> set[str]:
-        matches = PROPER_TERM_PATTERN.findall(text)
-        sentence_starts = {match.group(1) for match in SENTENCE_START_PATTERN.finditer(text)}
-        return {
-            term
-            for term in matches
-            if term not in sentence_starts
-            and term not in ContentChecker.ALLOWED_TERMS
-            and not NUMBER_UNIT_PATTERN.fullmatch(term)
-            and (
-                term[0].isupper()
-                or "&" in term
-                or (any(char.isalpha() for char in term) and any(char.isdigit() for char in term))
+        # Only the occurrence at a sentence start is exempt; the same word elsewhere is checked.
+        sentence_starts = {match.start(1) for match in SENTENCE_START_PATTERN.finditer(text)}
+        terms: set[str] = set()
+        for match in PROPER_TERM_PATTERN.finditer(text):
+            term = match.group()
+            if term in ContentChecker.ALLOWED_TERMS or NUMBER_UNIT_PATTERN.fullmatch(term):
+                continue
+            is_marked = "&" in term or (
+                any(char.isalpha() for char in term) and any(char.isdigit() for char in term)
             )
-        }
+            is_capitalized = term[0].isupper() and match.start() not in sentence_starts
+            if is_marked or is_capitalized:
+                terms.add(term)
+        return terms
 
     @staticmethod
     def _extract_source_terms(facts: list[Fact]) -> set[str]:
@@ -166,52 +167,23 @@ class ContentChecker:
             term.casefold() in folded_terms for term in self._proper_terms_in(paragraph_text)
         )
 
-    def _cover(self, section: Section, facts: list[Fact]) -> list[Paragraph]:
-        # Template blocks render every section fact, so only absent facts need prose.
-        rendered_paths = {fact.path for fact in section.facts}
-        missing = [fact for fact in facts if fact.path not in rendered_paths]
-        return [
-            Paragraph(
-                text=format_fact_sentence(fact),
-                origin=ParagraphOrigin.TEMPLATE,
-                sources=[SourceReference(fact_path=fact.path, line=fact.line)],
-            )
-            for fact in missing
-        ]
-
     def check(self, doc: Document, facts: list[Fact]) -> tuple[Document, CheckResult]:
-        mapped = [fact for section in doc.sections for fact in section.facts]
-        mapped_paths = {fact.path for fact in mapped}
+        mapped_paths = {fact.path for section in doc.sections for fact in section.facts}
         llm_paths: set[str] = set()
         replaced: list[str] = []
         sections: list[Section] = []
         for section in doc.sections:
-            valid_paragraphs: list[Paragraph] = []
+            kept_paragraphs: list[Paragraph] = []
             for paragraph in section.paragraphs:
-                if paragraph.origin != ParagraphOrigin.LLM:
-                    valid_paragraphs.append(paragraph)
-                elif self._verify(paragraph, section.facts, doc):
-                    valid_paragraphs.append(paragraph)
-                    llm_paths.update(source.fact_path for source in paragraph.sources)
-                else:
+                is_llm = paragraph.origin == ParagraphOrigin.LLM
+                if is_llm and not self._verify(paragraph, section.facts, doc):
+                    # Rejected prose is dropped; the template blocks still show every section fact.
                     replaced.append(paragraph.text)
-                    section_facts = {fact.path: fact for fact in section.facts}
-                    referenced = [
-                        section_facts[path]
-                        for path in {source.fact_path for source in paragraph.sources}
-                        if path in section_facts
-                    ]
-                    fallback_facts = referenced or section.facts
-                    valid_paragraphs.extend(
-                        Paragraph(
-                            text=format_fact_sentence(fact),
-                            origin=ParagraphOrigin.TEMPLATE,
-                            sources=[SourceReference(fact_path=fact.path, line=fact.line)],
-                        )
-                        for fact in fallback_facts
-                    )
-            valid_paragraphs.extend(self._cover(section, section.facts))
-            sections.append(section.model_copy(update={"paragraphs": valid_paragraphs}))
+                    continue
+                kept_paragraphs.append(paragraph)
+                if is_llm:
+                    llm_paths.update(source.fact_path for source in paragraph.sources)
+            sections.append(section.model_copy(update={"paragraphs": kept_paragraphs}))
         checked = doc.model_copy(update={"sections": sections})
         coverage = (
             len(llm_paths & mapped_paths) / len(mapped_paths) * 100 if mapped_paths else 100.0

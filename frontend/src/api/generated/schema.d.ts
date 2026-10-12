@@ -126,14 +126,6 @@ export interface components {
       /** Suggestions */
       suggestions: components["schemas"]["CompletenessSuggestion"][];
     };
-    /** Body_upload_logo_api_logo_put */
-    Body_upload_logo_api_logo_put: {
-      /**
-       * Logo
-       * Format: binary
-       */
-      logo: string;
-    };
     /** CheckResult */
     CheckResult: {
       document_type: components["schemas"]["DocumentType"];
@@ -272,7 +264,7 @@ export interface components {
      * ParagraphOrigin
      * @enum {string}
      */
-    ParagraphOrigin: "LLM" | "TEMPLATE" | "TABLE";
+    ParagraphOrigin: "LLM";
     /** Section */
     Section: {
       /** Heading */
@@ -306,6 +298,10 @@ export interface components {
       msg: string;
       /** Error Type */
       type: string;
+      /** Input */
+      input?: unknown;
+      /** Context */
+      ctx?: Record<string, never>;
     };
   };
   responses: never;
@@ -538,7 +534,13 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "multipart/form-data": components["schemas"]["Body_upload_logo_api_logo_put"];
+        "multipart/form-data": {
+          /**
+           * Logo
+           * Format: binary
+           */
+          logo: string;
+        };
       };
     };
     responses: {

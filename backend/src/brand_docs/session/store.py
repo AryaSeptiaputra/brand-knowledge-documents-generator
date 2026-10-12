@@ -44,9 +44,7 @@ class SessionStore:
         with self.lock:
             now = datetime.now(UTC)
             expired = [
-                key
-                for key, session in self.sessions.items()
-                if now - session.created_at > self.ttl
+                key for key, session in self.sessions.items() if now - session.created_at > self.ttl
             ]
             for key in expired:
                 del self.sessions[key]

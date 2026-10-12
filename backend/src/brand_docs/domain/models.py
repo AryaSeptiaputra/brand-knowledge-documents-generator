@@ -31,8 +31,8 @@ class Fact(BaseModel):
         | bool
         | datetime
         | date
-        | None
         | list[str | int | float | bool | datetime | date | None]
+        | None
     )
     data_kind: DataKind
     product: str | None = None

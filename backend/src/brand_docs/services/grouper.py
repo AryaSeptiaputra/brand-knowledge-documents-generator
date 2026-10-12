@@ -7,8 +7,20 @@ from brand_docs.utils.logger import setup_logger
 logger = setup_logger(__name__)
 GUIDE_KEYWORDS = frozenset(
     {
-        "cara", "langkah", "panduan", "petunjuk", "tutorial", "perawatan", "rawat",
-        "pemesanan", "pesan", "ukuran", "size", "sizing", "howto", "guide",
+        "cara",
+        "langkah",
+        "panduan",
+        "petunjuk",
+        "tutorial",
+        "perawatan",
+        "rawat",
+        "pemesanan",
+        "pesan",
+        "ukuran",
+        "size",
+        "sizing",
+        "howto",
+        "guide",
     }
 )
 SIZE_KEYWORDS = frozenset({"ukuran", "size", "sizing"})

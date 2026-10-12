@@ -37,7 +37,7 @@ class OllamaClient:
             logger.error("Ollama request failed", exc_info=True)
             raise LlmUnavailableError("The local language model is unavailable.") from error
         try:
-            return schema.model_validate_json(response.response)
+            return schema.model_validate_json(response.response or "")
         except (ValidationError, ValueError) as error:
             logger.error("Ollama returned invalid structured output", exc_info=True)
             raise LlmOutputError("The local language model returned invalid output.") from error

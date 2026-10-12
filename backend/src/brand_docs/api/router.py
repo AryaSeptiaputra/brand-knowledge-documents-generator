@@ -3,7 +3,7 @@
 from typing import Annotated, cast
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, Request, UploadFile
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, Response
 
 from brand_docs.api.schemas import (
@@ -15,6 +15,7 @@ from brand_docs.api.schemas import (
     GenerateResponse,
     GroupingChange,
     LogoInfo,
+    LogoUpload,
 )
 from brand_docs.domain.enums import DocumentType
 from brand_docs.domain.models import Document, Grouping
@@ -34,11 +35,30 @@ VALIDATION_ERROR = {
 }
 PDF_ERROR = {"model": ErrorResponse, "description": "The document could not be rendered."}
 PDF_CONTENT = {"schema": {"type": "string", "format": "binary"}}
+LOGO_REQUEST_BODY = {
+    "required": True,
+    "content": {
+        "multipart/form-data": {
+            "schema": {
+                "type": "object",
+                "required": ["logo"],
+                "properties": {"logo": {"type": "string", "format": "binary", "title": "Logo"}},
+            }
+        }
+    },
+}
 
 
 def get_services(request: Request) -> Services:
     """Resolve configured services from the application instance."""
     return cast(Services, request.app.state.services)
+
+
+async def read_logo_upload(
+    request: Request, services: Annotated[Services, Depends(get_services)]
+) -> LogoUpload:
+    """Read the multipart logo body in memory within the configured size limit."""
+    return await services.logo_reader.read(request)
 
 
 class ApiRouter:
@@ -104,6 +124,7 @@ class ApiRouter:
             methods=["PUT"],
             response_model=LogoInfo,
             responses={404: SESSION_ERROR, 422: VALIDATION_ERROR},
+            openapi_extra={"requestBody": LOGO_REQUEST_BODY},
         )
         self.router.add_api_route(
             "/logo",
@@ -219,12 +240,12 @@ class ApiRouter:
     def upload_logo(
         self,
         session_id: str,
-        logo: Annotated[UploadFile, File()],
+        upload: Annotated[LogoUpload, Depends(read_logo_upload)],
         services: Annotated[Services, Depends(get_services)],
     ) -> LogoInfo | Response:
         services.store.get(session_id)
         try:
-            brand_logo = services.validator.validate_logo(logo)
+            brand_logo = services.validator.validate_logo(upload.file_name, upload.content)
         except InvalidLogoError as error:
             return Response(
                 content=ErrorResponse(errors=[ErrorDetail(message=str(error))]).model_dump_json(

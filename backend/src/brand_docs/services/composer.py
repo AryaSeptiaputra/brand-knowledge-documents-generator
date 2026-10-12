@@ -20,7 +20,7 @@ from brand_docs.domain.models import (
 from brand_docs.errors import LlmOutputError, LlmUnavailableError
 from brand_docs.llm.client import LlmClient
 from brand_docs.utils.logger import setup_logger
-from brand_docs.utils.text import format_fact_sentence, humanize_key
+from brand_docs.utils.text import humanize_key
 
 logger = setup_logger(__name__)
 DOCUMENT_TITLES = {
@@ -60,18 +60,12 @@ class DocumentComposer:
     def _fallback_section(
         self, heading: str, source_section: str, order: int, facts: list[Fact]
     ) -> Section:
+        # No prose: the template blocks render every fact of the section.
         return Section(
             heading=heading,
             order=order,
             source_section=source_section,
-            paragraphs=[
-                Paragraph(
-                    text=format_fact_sentence(fact),
-                    origin=ParagraphOrigin.TEMPLATE,
-                    sources=[SourceReference(fact_path=fact.path, line=fact.line)],
-                )
-                for fact in facts
-            ],
+            paragraphs=[],
             facts=facts,
         )
 
@@ -118,7 +112,7 @@ class DocumentComposer:
                     facts=facts,
                 )
             except (LlmOutputError, LlmUnavailableError, ValidationError, ValueError):
-                # Retry once per setting, then use factual fallback prose.
+                # Retry up to the setting, then fall back to the template blocks only.
                 logger.warning(
                     "Section generation failed on attempt %d", attempt + 1, exc_info=True
                 )
@@ -129,9 +123,7 @@ class DocumentComposer:
     @staticmethod
     def _facts_for_unit(brand: BrandData, unit: str) -> list[Fact]:
         return [
-            fact
-            for fact in brand.facts
-            if fact.path == unit or fact.path.startswith(f"{unit}.")
+            fact for fact in brand.facts if fact.path == unit or fact.path.startswith(f"{unit}.")
         ]
 
     @staticmethod
@@ -194,9 +186,7 @@ class DocumentComposer:
             if fact.path == product_root:
                 continue
             size_entry = DocumentComposer._most_specific_size_unit(size_units, fact.path)
-            if size_entry is None and include_product:
-                facts.append(fact)
-            elif (
+            if (size_entry is None and include_product) or (
                 size_entry is not None
                 and doc_type == DocumentType.PRODUCT_KNOWLEDGE
                 and doc_type in size_entry.document_types

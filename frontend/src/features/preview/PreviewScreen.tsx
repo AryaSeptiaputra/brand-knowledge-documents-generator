@@ -213,8 +213,8 @@ export function PreviewScreen({
                 </dl>
                 {replacedParagraphs.length > 0 && (
                   <p className="caption">
-                    Some paragraphs were replaced with source-based text to keep the document
-                    accurate.
+                    Some generated paragraphs were removed because your data did not support them.
+                    Every fact is still shown in the document.
                   </p>
                 )}
               </section>

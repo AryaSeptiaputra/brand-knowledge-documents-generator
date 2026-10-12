@@ -52,3 +52,6 @@ class ErrorResponse(BaseModel):
     errors: list[ErrorDetail] = Field(default_factory=list)
 
 
+class LogoUpload(BaseModel):
+    file_name: str | None
+    content: bytes

@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import timedelta
 
+from brand_docs.api.logo_upload import LogoFormReader
 from brand_docs.llm.ollama_client import OllamaClient
 from brand_docs.rendering.html import HtmlRenderer
 from brand_docs.rendering.pdf import PdfRenderer
@@ -28,6 +29,7 @@ class Services:
     checker: ContentChecker
     html_renderer: HtmlRenderer
     pdf_renderer: PdfRenderer
+    logo_reader: LogoFormReader
 
 
 def build_services(settings: Settings) -> Services:
@@ -37,7 +39,9 @@ def build_services(settings: Settings) -> Services:
     return Services(
         settings=settings,
         store=SessionStore(timedelta(minutes=settings.session_ttl_minutes)),
-        validator=DataValidator(settings.max_logo_bytes),
+        validator=DataValidator(
+            settings.max_logo_bytes, settings.max_yaml_bytes, settings.max_yaml_nodes
+        ),
         extractor=FactExtractor(),
         grouper=DocumentGrouper(),
         advisor=CompletenessAdvisor(),
@@ -45,4 +49,5 @@ def build_services(settings: Settings) -> Services:
         checker=ContentChecker(),
         html_renderer=html_renderer,
         pdf_renderer=PdfRenderer(html_renderer),
+        logo_reader=LogoFormReader(settings.max_logo_bytes),
     )

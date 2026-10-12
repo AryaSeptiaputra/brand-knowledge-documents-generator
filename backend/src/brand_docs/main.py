@@ -21,37 +21,36 @@ from brand_docs.utils.logger import setup_logger
 logger = setup_logger(__name__)
 
 
-def _session_not_found(_: Request, error: SessionNotFoundError) -> JSONResponse:
+# Starlette types every handler as (Request, Exception); each handler is registered for one class.
+def _session_not_found(_: Request, error: Exception) -> JSONResponse:
     return JSONResponse(status_code=404, content={"errors": [{"message": str(error)}]})
 
 
-def _invalid_data(_: Request, error: YamlValidationError) -> JSONResponse:
-    return JSONResponse(
-        status_code=422,
-        content={
-            "errors": [
-                {"message": error.message, "line": error.line, "column": error.column}
-            ]
-        },
-    )
+def _invalid_data(_: Request, error: Exception) -> JSONResponse:
+    detail: dict[str, str | int] = {"message": str(error)}
+    if isinstance(error, YamlValidationError):
+        detail = {"message": error.message, "line": error.line, "column": error.column}
+    return JSONResponse(status_code=422, content={"errors": [detail]})
 
 
-def _invalid_request(_: Request, error: RequestValidationError) -> JSONResponse:
+def _invalid_request(_: Request, error: Exception) -> JSONResponse:
+    if not isinstance(error, RequestValidationError):
+        return JSONResponse(status_code=422, content={"errors": [{"message": str(error)}]})
     return JSONResponse(
         status_code=422,
         content={"errors": [{"message": item["msg"]} for item in error.errors()]},
     )
 
 
-def _invalid_logo(_: Request, error: InvalidLogoError) -> JSONResponse:
+def _invalid_logo(_: Request, error: Exception) -> JSONResponse:
     return JSONResponse(status_code=422, content={"errors": [{"message": str(error)}]})
 
 
-def _pdf_error(_: Request, error: PdfRenderError) -> JSONResponse:
+def _pdf_error(_: Request, error: Exception) -> JSONResponse:
     return JSONResponse(status_code=500, content={"errors": [{"message": str(error)}]})
 
 
-def _application_error(_: Request, error: BrandDocsError) -> JSONResponse:
+def _application_error(_: Request, error: Exception) -> JSONResponse:
     logger.error("Unhandled project error", exc_info=True)
     return JSONResponse(
         status_code=500,

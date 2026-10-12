@@ -22,9 +22,7 @@ class FactExtractor:
             return value
         return str(value)
 
-    def _walk(
-        self, node: object, path: str, product: str | None, line: int
-    ) -> list[Fact]:
+    def _walk(self, node: object, path: str, product: str | None, line: int) -> list[Fact]:
         facts: list[Fact] = []
         stack: list[tuple[object, str, int]] = [(node, path, line)]
         data_kind = DataKind.PRODUCT if product else DataKind.GENERAL_BRAND

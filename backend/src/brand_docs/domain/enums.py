@@ -16,8 +16,6 @@ class DocumentType(StrEnum):
 
 class ParagraphOrigin(StrEnum):
     LLM = "LLM"
-    TEMPLATE = "TEMPLATE"
-    TABLE = "TABLE"
 
 
 class UnitKind(StrEnum):

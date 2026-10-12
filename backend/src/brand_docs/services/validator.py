@@ -3,54 +3,105 @@
 import re
 import struct
 import zlib
+from dataclasses import dataclass
 from pathlib import Path
 from threading import RLock
 from xml.etree import ElementTree
 
-from fastapi import UploadFile
 from ruamel.yaml import YAML
-from ruamel.yaml.comments import CommentedMap, CommentedSeq
+from ruamel.yaml.comments import CommentedMap
 from ruamel.yaml.error import YAMLError
+from ruamel.yaml.events import (
+    AliasEvent,
+    CollectionEndEvent,
+    CollectionStartEvent,
+    Event,
+    ScalarEvent,
+)
 
 from brand_docs.domain.models import BrandLogo, ValidationResult, YamlError
-from brand_docs.errors import InvalidLogoError
+from brand_docs.errors import InvalidLogoError, YamlValidationError
 from brand_docs.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
 
+@dataclass
+class _OpenNode:
+    anchor: str | None
+    size: int
+
+
 class DataValidator:
     """Validate user YAML and optional uploaded brand logos."""
 
-    def __init__(self, max_logo_bytes: int) -> None:
+    def __init__(self, max_logo_bytes: int, max_yaml_bytes: int, max_yaml_nodes: int) -> None:
         self.max_logo_bytes = max_logo_bytes
+        self.max_yaml_bytes = max_yaml_bytes
+        self.max_yaml_nodes = max_yaml_nodes
         self.yaml = YAML(typ="rt")
         self.yaml.allow_duplicate_keys = False
         self.yaml_lock = RLock()
 
     @staticmethod
-    def _has_cycle(data: object) -> bool:
-        active: set[int] = set()
-        complete: set[int] = set()
-        stack: list[tuple[object, bool]] = [(data, False)]
-        while stack:
-            node, exiting = stack.pop()
-            if not isinstance(node, (CommentedMap, list, tuple, CommentedSeq)):
+    def _error_at(event: Event, message: str) -> YamlValidationError:
+        mark = event.start_mark
+        if mark is None:
+            return YamlValidationError(message, 1, 1)
+        return YamlValidationError(message, mark.line + 1, mark.column + 1)
+
+    def _check_expansion(self, raw: str) -> None:
+        # Counts nodes as the loader would expand them, without building the expanded data.
+        anchor_sizes: dict[str, int] = {}
+        open_nodes = [_OpenNode(anchor=None, size=0)]
+        total = 0
+        for event in self.yaml.parse(raw):
+            if isinstance(event, AliasEvent):
+                if any(node.anchor == event.anchor for node in open_nodes):
+                    raise self._error_at(event, "Recursive YAML aliases are not supported.")
+                added = anchor_sizes.get(str(event.anchor), 0)
+                open_nodes[-1].size += added
+            elif isinstance(event, CollectionStartEvent):
+                added = 1
+                open_nodes.append(_OpenNode(anchor=event.anchor, size=1))
+            elif isinstance(event, ScalarEvent):
+                added = 1
+                open_nodes[-1].size += 1
+                if event.anchor:
+                    anchor_sizes[event.anchor] = 1
+            elif isinstance(event, CollectionEndEvent):
+                closed = open_nodes.pop()
+                if closed.anchor:
+                    anchor_sizes[closed.anchor] = closed.size
+                open_nodes[-1].size += closed.size
                 continue
-            identity = id(node)
-            if exiting:
-                active.remove(identity)
-                complete.add(identity)
+            else:
                 continue
-            if identity in active:
-                return True
-            if identity in complete:
-                continue
-            active.add(identity)
-            stack.append((node, True))
-            values = node.values() if isinstance(node, CommentedMap) else node
-            stack.extend((value, False) for value in values)
-        return False
+            total += added
+            if total > self.max_yaml_nodes:
+                raise self._error_at(
+                    event,
+                    f"The YAML document expands to more than {self.max_yaml_nodes} values; "
+                    "reduce the data or the number of aliases.",
+                )
+
+    def _load(self, raw: str) -> object:
+        if len(raw.encode("utf-8")) > self.max_yaml_bytes:
+            raise YamlValidationError(
+                f"The YAML document exceeds the {self.max_yaml_bytes} byte limit.", 1, 1
+            )
+        try:
+            with self.yaml_lock:
+                self._check_expansion(raw)
+                return self.yaml.load(raw)
+        except YAMLError as error:
+            mark = getattr(error, "problem_mark", None)
+            line = mark.line + 1 if mark else 1
+            column = mark.column + 1 if mark else 1
+            problem = getattr(error, "problem", None) or "Invalid YAML"
+            raise YamlValidationError(problem, line, column) from error
+        except RecursionError as error:
+            raise YamlValidationError("The YAML document is nested too deeply.", 1, 1) from error
 
     def _error_for_key(self, data: CommentedMap, key: object, message: str) -> YamlError:
         try:
@@ -82,41 +133,13 @@ class DataValidator:
 
     def validate(self, raw: str) -> ValidationResult:
         try:
-            with self.yaml_lock:
-                data = self.yaml.load(raw)
-        except YAMLError as error:
-            mark = getattr(error, "problem_mark", None)
-            line = mark.line + 1 if mark else 1
-            column = mark.column + 1 if mark else 1
-            problem = getattr(error, "problem", None) or "Invalid YAML"
+            data = self._load(raw)
+            if not isinstance(data, CommentedMap):
+                raise YamlValidationError("The YAML document must be a mapping.", 1, 1)
+        except YamlValidationError as error:
             return ValidationResult(
                 is_valid=False,
-                errors=[YamlError(message=problem, line=line, column=column)],
-            )
-        except RecursionError:
-            return ValidationResult(
-                is_valid=False,
-                errors=[
-                    YamlError(message="The YAML document is nested too deeply.", line=1, column=1)
-                ],
-            )
-        if not isinstance(data, CommentedMap):
-            return ValidationResult(
-                is_valid=False,
-                errors=[
-                    YamlError(message="The YAML document must be a mapping.", line=1, column=1)
-                ],
-            )
-        if self._has_cycle(data):
-            return ValidationResult(
-                is_valid=False,
-                errors=[
-                    YamlError(
-                        message="Recursive YAML aliases are not supported.",
-                        line=1,
-                        column=1,
-                    )
-                ],
+                errors=[YamlError(message=error.message, line=error.line, column=error.column)],
             )
         return self._validate_root(data)
 
@@ -162,8 +185,19 @@ class DataValidator:
         ):
             return False
         frame_markers = {
-            0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7,
-            0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF,
+            0xC0,
+            0xC1,
+            0xC2,
+            0xC3,
+            0xC5,
+            0xC6,
+            0xC7,
+            0xC9,
+            0xCA,
+            0xCB,
+            0xCD,
+            0xCE,
+            0xCF,
         }
         offset = 2
         has_frame = False
@@ -243,14 +277,21 @@ class DataValidator:
                 element.attrib["style"] = style_pattern.sub("", element.attrib["style"])
             if element.tag.rsplit("}", 1)[-1].lower() == "style" and element.text:
                 element.text = style_pattern.sub("", element.text)
-        return ElementTree.tostring(root, encoding="utf-8")
+        return ElementTree.tostring(root, encoding="unicode").encode("utf-8")
 
-    def validate_logo(self, file: UploadFile) -> BrandLogo:
-        try:
-            content = file.file.read(self.max_logo_bytes + 1)
-        except OSError as error:
-            logger.error("Unable to read logo upload", exc_info=True)
-            raise InvalidLogoError("Unable to read the uploaded logo.") from error
+    def validate_logo(self, file_name: str | None, content: bytes) -> BrandLogo:
+        """Check an in-memory logo upload and return its safe stored form.
+
+        Args:
+            file_name: Client-supplied file name, if any.
+            content: Raw logo bytes read from the request.
+
+        Returns:
+            The logo with its detected media type and sanitized content.
+
+        Raises:
+            InvalidLogoError: The logo is empty, too large, or not a valid PNG, JPEG, or SVG.
+        """
         if not content or len(content) > self.max_logo_bytes:
             raise InvalidLogoError("Logo is empty or exceeds the upload size limit.")
         media_type = self._detect_logo_type(content)
@@ -258,7 +299,7 @@ class DataValidator:
             raise InvalidLogoError("Only valid PNG, JPEG, and SVG logos are supported.")
         safe_content = self._sanitize_svg(content) if media_type == "image/svg+xml" else content
         return BrandLogo(
-            file_name=Path(file.filename or "brand-logo").name,
+            file_name=Path(file_name or "brand-logo").name,
             media_type=media_type,
             content=safe_content,
         )

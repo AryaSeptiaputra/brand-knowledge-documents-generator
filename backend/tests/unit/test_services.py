@@ -1,11 +1,10 @@
 """Unit coverage for YAML services, grouping, fallback, and content checks."""
 
+import sys
 from datetime import datetime, timedelta
-from io import BytesIO
 from types import SimpleNamespace
 
 import pytest
-from fastapi import UploadFile
 from ruamel.yaml.comments import CommentedMap
 
 from brand_docs.domain.enums import DataKind, DocumentType, ParagraphOrigin, UnitKind
@@ -37,14 +36,23 @@ from brand_docs.services.checker import ContentChecker
 from brand_docs.services.composer import DocumentComposer
 from brand_docs.services.extractor import FactExtractor
 from brand_docs.services.grouper import DocumentGrouper
-from brand_docs.services.validator import DataValidator
 from brand_docs.session.store import Session, SessionStore
 from brand_docs.settings import Settings
+from tests.conftest import build_validator
 
 
 class UnusedLlm:
     def generate(self, prompt: str, schema: type) -> object:
         raise AssertionError("No-model composition must not call the LLM.")
+
+
+class FailingLlm:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def generate(self, prompt: str, schema: type) -> object:
+        self.calls += 1
+        raise LlmUnavailableError("The local language model is unavailable.")
 
 
 class FakeOllamaRunner:
@@ -58,7 +66,7 @@ class FakeOllamaRunner:
 
 
 def test_validator_reports_missing_brand_location(yaml_without_brand) -> None:
-    result = DataValidator(max_logo_bytes=100).validate(yaml_without_brand)
+    result = build_validator(max_logo_bytes=100).validate(yaml_without_brand)
 
     assert result.is_valid is False
     assert result.errors[0].line == 1
@@ -67,7 +75,7 @@ def test_validator_reports_missing_brand_location(yaml_without_brand) -> None:
 
 def test_extractor_preserves_the_brand_value_verbatim() -> None:
     raw = 'brand: " Example "\n'
-    result = DataValidator(max_logo_bytes=100).validate(raw)
+    result = build_validator(max_logo_bytes=100).validate(raw)
     assert result.data is not None
 
     brand = FactExtractor().extract(result.data, raw)
@@ -83,7 +91,7 @@ def test_extractor_preserves_leaf_fact_line_number(brand_data) -> None:
 
 def test_extractor_uses_each_mixed_sequence_item_line() -> None:
     raw = "brand: Example\nmixed:\n  - plain\n  - nested:\n      value: x\n  - 12\n"
-    result = DataValidator(max_logo_bytes=100).validate(raw)
+    result = build_validator(max_logo_bytes=100).validate(raw)
     assert result.data is not None
 
     facts = FactExtractor().extract(result.data, raw).facts
@@ -94,7 +102,7 @@ def test_extractor_uses_each_mixed_sequence_item_line() -> None:
 
 def test_extractor_handles_deep_mapping_without_recursion() -> None:
     raw = "brand: Example\nnested: value\n"
-    result = DataValidator(max_logo_bytes=100).validate(raw)
+    result = build_validator(max_logo_bytes=100).validate(raw)
     assert result.data is not None
 
     nested: object = "leaf"
@@ -110,14 +118,52 @@ def test_extractor_handles_deep_mapping_without_recursion() -> None:
 
 
 def test_validator_rejects_recursive_yaml_aliases() -> None:
-    result = DataValidator(max_logo_bytes=100).validate("brand: Example\nitems: &items [*items]\n")
+    result = build_validator(max_logo_bytes=100).validate(
+        "brand: Example\nitems: &items [*items]\n"
+    )
 
     assert result.is_valid is False
     assert result.errors[0].message == "Recursive YAML aliases are not supported."
 
 
+def _nested_alias_yaml(levels: int, width: int) -> str:
+    lines = ["brand: Example", f"a0: &a0 [{', '.join(['x'] * width)}]"]
+    for level in range(1, levels + 1):
+        aliases = ", ".join([f"*a{level - 1}"] * width)
+        lines.append(f"a{level}: &a{level} [{aliases}]")
+    return "\n".join(lines) + "\n"
+
+
+def test_validator_rejects_nested_alias_expansion() -> None:
+    raw = _nested_alias_yaml(levels=5, width=10)
+
+    result = build_validator(max_yaml_nodes=20_000).validate(raw)
+
+    assert len(raw.encode()) < 400
+    assert result.is_valid is False
+    assert "expands to more than 20000 values" in result.errors[0].message
+    assert result.errors[0].line > 1
+
+
+def test_validator_counts_alias_expansion_within_limit() -> None:
+    raw = _nested_alias_yaml(levels=1, width=3)
+
+    assert build_validator(max_yaml_nodes=22).validate(raw).is_valid is True
+    assert build_validator(max_yaml_nodes=21).validate(raw).is_valid is False
+
+
+def test_validator_rejects_yaml_over_the_size_limit() -> None:
+    raw = "brand: Example\nnote: " + "x" * 200 + "\n"
+
+    result = build_validator(max_yaml_bytes=100).validate(raw)
+
+    assert result.is_valid is False
+    assert result.errors[0].message == "The YAML document exceeds the 100 byte limit."
+    assert (result.errors[0].line, result.errors[0].column) == (1, 1)
+
+
 def test_validator_handles_deep_parsed_mappings_without_recursion() -> None:
-    validator = DataValidator(max_logo_bytes=100)
+    validator = build_validator(max_logo_bytes=100)
     nested = CommentedMap()
     current = nested
     for _ in range(1500):
@@ -135,7 +181,7 @@ def test_validator_handles_deep_parsed_mappings_without_recursion() -> None:
 def test_validator_maps_parser_recursion_error_to_yaml_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    validator = DataValidator(max_logo_bytes=100)
+    validator = build_validator(max_logo_bytes=100)
 
     def raise_recursion_error(_: str) -> None:
         raise RecursionError
@@ -159,23 +205,46 @@ def test_grouper_splits_size_and_applies_grouping_change(brand_data) -> None:
     assert changed.types_for("retur") == [DocumentType.GUIDE]
 
 
-def test_composer_uses_only_template_fallback_without_model(brand_data) -> None:
+def test_composer_uses_only_template_blocks_without_model(brand_data) -> None:
     grouping = DocumentGrouper().propose(brand_data)
     composer = DocumentComposer(UnusedLlm(), use_llm=False, max_retries=1)
     documents = composer.compose(brand_data, grouping)
 
     assert {document.document_type for document in documents} == set(DocumentType)
-    assert all(
-        paragraph.origin == ParagraphOrigin.TEMPLATE
-        for document in documents
-        for section in document.sections
-        for paragraph in section.paragraphs
-    )
+    sections = [section for document in documents for section in document.sections]
+    assert all(section.paragraphs == [] and section.facts for section in sections)
     product_document = next(
         doc for doc in documents if doc.document_type == DocumentType.PRODUCT_KNOWLEDGE
     )
     assert len(product_document.sections) == 1
     assert product_document.sections[0].heading == "kaos boxy"
+
+
+def test_composer_falls_back_to_template_blocks_after_retries(brand_data) -> None:
+    llm = FailingLlm()
+    grouping = DocumentGrouper().propose(brand_data)
+
+    documents = DocumentComposer(llm, use_llm=True, max_retries=1).compose(brand_data, grouping)
+
+    sections = [section for document in documents for section in document.sections]
+    assert llm.calls == 2 * len(sections)
+    assert all(section.paragraphs == [] and section.facts for section in sections)
+
+
+def test_no_model_html_shows_each_fact_once() -> None:
+    raw = "brand: Contoh\nretur:\n  batas_hari: 7\n  syarat: [label masih terpasang]\n"
+    result = build_validator().validate(raw)
+    assert result.data is not None
+    brand = FactExtractor().extract(result.data, raw)
+    document = DocumentComposer(UnusedLlm(), use_llm=False, max_retries=1).compose(
+        brand, DocumentGrouper().propose(brand)
+    )[0]
+
+    html = HtmlRenderer().render(document, show_sources=False)
+
+    assert html.count("Batas hari") == 1
+    assert html.count("label masih terpasang") == 1
+    assert "Batas hari: 7." not in html
 
 
 def test_composer_accepts_structured_paragraph_with_source_facts(brand_data) -> None:
@@ -241,9 +310,7 @@ def test_ollama_client_maps_connection_errors(monkeypatch: pytest.MonkeyPatch) -
 def test_product_and_size_rows_do_not_duplicate_facts(brand_data) -> None:
     grouper = DocumentGrouper()
     grouping = grouper.propose(brand_data)
-    grouping = grouper.apply_change(
-        grouping, "product.kaos boxy", [DocumentType.GUIDE]
-    )
+    grouping = grouper.apply_change(grouping, "product.kaos boxy", [DocumentType.GUIDE])
     documents = DocumentComposer(UnusedLlm(), use_llm=False, max_retries=1).compose(
         brand_data, grouping
     )
@@ -290,9 +357,9 @@ def test_nested_product_size_heading_uses_product_name() -> None:
             )
         ]
     )
-    document = DocumentComposer(UnusedLlm(), use_llm=False, max_retries=1).compose(
-        brand, grouping
-    )[0]
+    document = DocumentComposer(UnusedLlm(), use_llm=False, max_retries=1).compose(brand, grouping)[
+        0
+    ]
 
     assert document.sections[0].heading == "Size · kaos boxy"
 
@@ -316,9 +383,9 @@ def test_nested_product_size_heading_uses_last_size_component() -> None:
         ]
     )
 
-    document = DocumentComposer(UnusedLlm(), use_llm=False, max_retries=1).compose(
-        brand, grouping
-    )[0]
+    document = DocumentComposer(UnusedLlm(), use_llm=False, max_retries=1).compose(brand, grouping)[
+        0
+    ]
 
     assert document.sections[0].heading == "Ukuran · kaos boxy"
 
@@ -371,13 +438,9 @@ def test_product_size_scalar_respects_its_document_mapping() -> None:
     brand = BrandData(brand_name="Contoh", raw_yaml="", facts=[fact])
     grouper = DocumentGrouper()
     grouping = grouper.propose(brand)
-    grouping = grouper.apply_change(
-        grouping, "product.kaos boxy.size", [DocumentType.GUIDE]
-    )
+    grouping = grouper.apply_change(grouping, "product.kaos boxy.size", [DocumentType.GUIDE])
 
-    documents = DocumentComposer(UnusedLlm(), use_llm=False, max_retries=1).compose(
-        brand, grouping
-    )
+    documents = DocumentComposer(UnusedLlm(), use_llm=False, max_retries=1).compose(brand, grouping)
 
     assert [document.document_type for document in documents] == [DocumentType.GUIDE]
     assert documents[0].sections[0].facts == [fact]
@@ -414,17 +477,13 @@ def test_nested_size_mapping_uses_the_most_specific_grouping_unit() -> None:
         [DocumentType.GUIDE],
     )
 
-    documents = DocumentComposer(UnusedLlm(), use_llm=False, max_retries=1).compose(
-        brand, grouping
-    )
+    documents = DocumentComposer(UnusedLlm(), use_llm=False, max_retries=1).compose(brand, grouping)
     product_knowledge = next(
         document
         for document in documents
         if document.document_type == DocumentType.PRODUCT_KNOWLEDGE
     )
-    guide = next(
-        document for document in documents if document.document_type == DocumentType.GUIDE
-    )
+    guide = next(document for document in documents if document.document_type == DocumentType.GUIDE)
 
     assert [fact.path for fact in product_knowledge.sections[0].facts] == [facts[0].path]
     assert [fact.path for fact in guide.sections[0].facts] == [facts[1].path]
@@ -438,7 +497,7 @@ def test_advisor_returns_suggestions_outside_document_content(brand_data) -> Non
 
 
 def test_session_store_expires_sessions() -> None:
-    validator = DataValidator(max_logo_bytes=100)
+    validator = build_validator(max_logo_bytes=100)
     result = validator.validate("brand: Example\n")
     assert result.data is not None
     brand = FactExtractor().extract(result.data, "brand: Example\n")
@@ -450,7 +509,7 @@ def test_session_store_expires_sessions() -> None:
         store.get("expired")
 
 
-def test_checker_replaces_fabricated_numbers(brand_data) -> None:
+def test_checker_drops_fabricated_paragraphs(brand_data) -> None:
     fact = next(item for item in brand_data.facts if item.path == "retur.batas_hari")
     doc = Document(
         document_type=DocumentType.POLICY,
@@ -477,7 +536,8 @@ def test_checker_replaces_fabricated_numbers(brand_data) -> None:
 
     assert result.fabrication_found is True
     assert result.replaced_paragraphs == ["Anda dapat mengajukan retur dalam 30 hari."]
-    assert checked.sections[0].paragraphs[-1].text == "Batas hari: 7."
+    assert checked.sections[0].paragraphs == []
+    assert checked.sections[0].facts == [fact]
 
 
 def test_checker_measures_llm_coverage_before_template_blocks() -> None:
@@ -580,6 +640,47 @@ def test_checker_rejects_unsupported_unicode_proper_term(brand_data) -> None:
     _, result = ContentChecker().check(document, [fact])
 
     assert result.fabrication_found is True
+
+
+def _check_retur_paragraph(text: str) -> bool:
+    fact = Fact(path="retur.batas_hari", value=7, data_kind=DataKind.GENERAL_BRAND, line=2)
+    document = Document(
+        document_type=DocumentType.POLICY,
+        title="Kebijakan Contoh",
+        brand_name="Contoh",
+        sections=[
+            Section(
+                heading="Retur",
+                order=1,
+                source_section="retur",
+                facts=[fact],
+                paragraphs=[
+                    Paragraph(
+                        text=text,
+                        origin=ParagraphOrigin.LLM,
+                        sources=[SourceReference(fact_path=fact.path, line=fact.line)],
+                    )
+                ],
+            )
+        ],
+    )
+    _, result = ContentChecker().check(document, [fact])
+    return result.fabrication_found
+
+
+def test_checker_checks_sentence_start_word_again_mid_sentence() -> None:
+    text = "Gojek menjemput retur Anda. Kurir Gojek datang dalam 7 hari."
+
+    assert _check_retur_paragraph(text) is True
+
+
+def test_checker_always_checks_ampersand_and_alphanumeric_tokens() -> None:
+    assert _check_retur_paragraph("J&T menjemput retur dalam 7 hari.") is True
+    assert _check_retur_paragraph("Retur dalam 7 hari. X7 menjemputnya.") is True
+
+
+def test_checker_exempts_only_the_sentence_start_occurrence() -> None:
+    assert _check_retur_paragraph("Kurir menjemput retur dalam 7 hari.") is False
 
 
 def test_checker_accepts_brand_name_with_sentence_punctuation(brand_data) -> None:
@@ -706,9 +807,7 @@ def test_checker_rejects_integer_when_source_is_decimal() -> None:
         ("Suhu tercatat -5 derajat.", False),
     ],
 )
-def test_checker_preserves_signs_of_negative_numbers(
-    text: str, fabrication_found: bool
-) -> None:
+def test_checker_preserves_signs_of_negative_numbers(text: str, fabrication_found: bool) -> None:
     fact = Fact(
         path="suhu.minimum",
         value=-5,
@@ -805,7 +904,7 @@ def test_checker_expands_unit_shared_by_range_endpoints() -> None:
     assert result.fabrication_found is False
 
 
-def test_checker_does_not_copy_foreign_source_facts_into_section(brand_data) -> None:
+def test_checker_drops_paragraph_citing_foreign_facts(brand_data) -> None:
     local_fact = next(item for item in brand_data.facts if item.path == "retur.batas_hari")
     foreign_fact = next(
         item for item in brand_data.facts if item.path == "pengiriman.gratis_ongkir_min"
@@ -834,14 +933,11 @@ def test_checker_does_not_copy_foreign_source_facts_into_section(brand_data) -> 
         ],
     )
 
-    checked, _ = ContentChecker().check(doc, brand_data.facts)
+    checked, result = ContentChecker().check(doc, brand_data.facts)
 
-    fallback_paths = {
-        source.fact_path
-        for paragraph in checked.sections[0].paragraphs
-        for source in paragraph.sources
-    }
-    assert fallback_paths == {local_fact.path}
+    assert result.replaced_paragraphs == ["Anda dapat mengajukan retur."]
+    assert checked.sections[0].paragraphs == []
+    assert checked.sections[0].facts == [local_fact]
 
 
 def test_checker_ignores_the_document_date(brand_data) -> None:
@@ -899,7 +995,7 @@ def test_pdf_renderer_omits_source_references(monkeypatch: pytest.MonkeyPatch, b
         def write_pdf() -> bytes:
             return b"%PDF-test"
 
-    monkeypatch.setattr("brand_docs.rendering.pdf.HTML", PdfHtmlDouble)
+    monkeypatch.setitem(sys.modules, "weasyprint", SimpleNamespace(HTML=PdfHtmlDouble))
     pdf = PdfRenderer(HtmlRenderer()).render(document)
 
     assert pdf.content == b"%PDF-test"
@@ -919,7 +1015,20 @@ def test_pdf_renderer_maps_write_failure(monkeypatch: pytest.MonkeyPatch) -> Non
         title="Kebijakan Contoh",
         brand_name="Contoh",
     )
-    monkeypatch.setattr("brand_docs.rendering.pdf.HTML", FailingPdfHtml)
+    monkeypatch.setitem(sys.modules, "weasyprint", SimpleNamespace(HTML=FailingPdfHtml))
+
+    with pytest.raises(PdfRenderError):
+        PdfRenderer(HtmlRenderer()).render(document)
+
+
+def test_pdf_renderer_maps_missing_weasyprint(monkeypatch: pytest.MonkeyPatch) -> None:
+    document = Document(
+        document_type=DocumentType.POLICY,
+        title="Kebijakan Contoh",
+        brand_name="Contoh",
+    )
+    # A None entry makes "from weasyprint import HTML" raise ImportError, as without GTK.
+    monkeypatch.setitem(sys.modules, "weasyprint", None)
 
     with pytest.raises(PdfRenderError):
         PdfRenderer(HtmlRenderer()).render(document)
@@ -1001,9 +1110,7 @@ def test_renderer_renders_scalar_lists() -> None:
         document_type=DocumentType.POLICY,
         title="Kebijakan Contoh",
         brand_name="Contoh",
-        sections=[
-            Section(heading="Retur", order=1, source_section="retur", facts=[fact])
-        ],
+        sections=[Section(heading="Retur", order=1, source_section="retur", facts=[fact])],
     )
 
     html = HtmlRenderer().render(document)
@@ -1075,19 +1182,16 @@ def test_renderer_escapes_user_values_as_text() -> None:
 
 
 def test_logo_validation_checks_content_and_sanitizes_svg(fake_logo_file) -> None:
-    validator = DataValidator(max_logo_bytes=1024)
-    uploaded = UploadFile(
-        filename="brand.svg",
-        file=BytesIO(
-            b'<svg xmlns="http://www.w3.org/2000/svg" xml:base="https://external.example/" '
-            b'onload="run()">'
-            b'<script>run()</script><image href="https://example.com/logo.png" />'
-            b'<circle cx="2" cy="2" r="1" fill="url(https://example.com/gradient.svg#paint)" />'
-            b'</svg>'
-        ),
+    validator = build_validator(max_logo_bytes=1024)
+    uploaded = (
+        b'<svg xmlns="http://www.w3.org/2000/svg" xml:base="https://external.example/" '
+        b'onload="run()">'
+        b'<script>run()</script><image href="https://example.com/logo.png" />'
+        b'<circle cx="2" cy="2" r="1" fill="url(https://example.com/gradient.svg#paint)" />'
+        b"</svg>"
     )
 
-    logo = validator.validate_logo(uploaded)
+    logo = validator.validate_logo("brand.svg", uploaded)
     assert logo.media_type == "image/svg+xml"
     assert b"script" not in logo.content
     assert b"onload" not in logo.content
@@ -1095,23 +1199,28 @@ def test_logo_validation_checks_content_and_sanitizes_svg(fake_logo_file) -> Non
     assert b"https://external.example" not in logo.content
 
     with pytest.raises(InvalidLogoError):
-        validator.validate_logo(fake_logo_file)
+        validator.validate_logo("fake.png", fake_logo_file)
 
 
 def test_logo_validation_accepts_valid_svg(valid_svg_logo) -> None:
-    logo = DataValidator(max_logo_bytes=1024).validate_logo(valid_svg_logo)
+    logo = build_validator(max_logo_bytes=1024).validate_logo("mark.svg", valid_svg_logo)
 
     assert logo.media_type == "image/svg+xml"
 
 
 def test_logo_validation_accepts_valid_jpeg(valid_jpeg_logo) -> None:
-    logo = DataValidator(max_logo_bytes=1024).validate_logo(valid_jpeg_logo)
+    logo = build_validator(max_logo_bytes=1024).validate_logo("mark.jpg", valid_jpeg_logo)
 
     assert logo.media_type == "image/jpeg"
 
 
 def test_logo_validation_rejects_jpeg_signature_without_frame() -> None:
-    upload = UploadFile(filename="fake.jpg", file=BytesIO(b"\xff\xd8\xff\xd9"))
-
     with pytest.raises(InvalidLogoError):
-        DataValidator(max_logo_bytes=1024).validate_logo(upload)
+        build_validator(max_logo_bytes=1024).validate_logo("fake.jpg", b"\xff\xd8\xff\xd9")
+
+
+def test_logo_validation_rejects_logo_over_the_size_limit(valid_png_logo) -> None:
+    with pytest.raises(InvalidLogoError):
+        build_validator(max_logo_bytes=len(valid_png_logo) - 1).validate_logo(
+            "mark.png", valid_png_logo
+        )

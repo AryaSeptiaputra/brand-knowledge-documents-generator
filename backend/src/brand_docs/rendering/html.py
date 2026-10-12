@@ -8,7 +8,7 @@ from jinja2 import Environment, PackageLoader
 
 from brand_docs.domain.models import BrandLogo, Document, Fact
 from brand_docs.utils.logger import setup_logger
-from brand_docs.utils.text import format_fact_sentence, humanize_key
+from brand_docs.utils.text import humanize_key
 
 logger = setup_logger(__name__)
 
@@ -45,7 +45,6 @@ class HtmlRenderer:
             autoescape=True,
         )
         self.env.filters["humanize_key"] = humanize_key
-        self.env.filters["format_fact_sentence"] = format_fact_sentence
 
     def _table_groups(self, facts: list[Fact]) -> dict[str, list[Fact]]:
         table_candidates: dict[str, list[Fact]] = defaultdict(list)
@@ -183,9 +182,7 @@ class HtmlRenderer:
             for parent, candidates in definition_groups.items()
         }
         parent_by_path = {
-            fact.path: parent
-            for parent, candidates in table_groups.items()
-            for fact in candidates
+            fact.path: parent for parent, candidates in table_groups.items() for fact in candidates
         }
         definition_parent_by_path = {
             fact.path: parent
