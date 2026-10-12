@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     model_name: str = "gemma4:26b-a4b-it-qat"
     temperature: float = 0.0
     num_ctx: int = 8192
+    ollama_timeout_seconds: float = 120.0
     use_llm: bool = False
     max_retries: int = 1
     max_logo_bytes: int = 5 * 1024 * 1024

@@ -1,0 +1,5 @@
+brand: Kaos Rimba
+product:
+  kaos boxy:
+    size:
+      S: {lebar_dada_cm: 50, panjang_cm: 68}

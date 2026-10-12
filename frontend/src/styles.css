@@ -271,6 +271,11 @@ code {
   background: #fdf0ee;
   box-shadow: inset 3px 0 #edb8ae;
 }
+.yaml-error-column {
+  background: #edb8ae;
+  color: #7a1f12;
+  text-decoration: underline wavy #7a1f12;
+}
 .editor-errors {
   padding: 10px 16px;
   border-top: 1px solid #edb8ae;

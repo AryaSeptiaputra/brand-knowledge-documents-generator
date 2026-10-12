@@ -19,7 +19,7 @@ from brand_docs.api.schemas import (
 )
 from brand_docs.domain.enums import DocumentType
 from brand_docs.domain.models import Document, Grouping
-from brand_docs.errors import InvalidLogoError, SessionNotFoundError, YamlValidationError
+from brand_docs.errors import InvalidLogoError, SessionNotFoundError, UnknownDocumentTypeError
 from brand_docs.factory import Services
 from brand_docs.session.store import Session
 from brand_docs.utils.logger import setup_logger
@@ -29,9 +29,17 @@ SESSION_ERROR = {
     "model": ErrorResponse,
     "description": "The requested session or document was not found.",
 }
+DOCUMENT_ERROR = {
+    "model": ErrorResponse,
+    "description": "The session, document type, or generated document was not found.",
+}
 VALIDATION_ERROR = {
     "model": ErrorResponse,
-    "description": "The submitted data or document type is invalid.",
+    "description": "The submitted data is invalid.",
+}
+GROUPING_ERROR = {
+    "model": ErrorResponse,
+    "description": "The submitted grouping change is invalid or names an unknown section.",
 }
 PDF_ERROR = {"model": ErrorResponse, "description": "The document could not be rendered."}
 PDF_CONTENT = {"schema": {"type": "string", "format": "binary"}}
@@ -81,7 +89,7 @@ class ApiRouter:
             self.change_grouping,
             methods=["PATCH"],
             response_model=Grouping,
-            responses={404: SESSION_ERROR, 422: VALIDATION_ERROR},
+            responses={404: SESSION_ERROR, 422: GROUPING_ERROR},
         )
 
     def _register_document_routes(self) -> None:
@@ -96,7 +104,15 @@ class ApiRouter:
             "/documents/{doc_type}/preview",
             self.preview,
             methods=["GET"],
-            responses={404: SESSION_ERROR, 422: VALIDATION_ERROR},
+            response_class=Response,
+            responses={
+                200: {
+                    "description": "The document preview as HTML.",
+                    "content": {"text/html": {"schema": {"type": "string"}}},
+                },
+                404: DOCUMENT_ERROR,
+                422: VALIDATION_ERROR,
+            },
         )
         self.router.add_api_route(
             "/documents/{doc_type}/pdf",
@@ -111,7 +127,7 @@ class ApiRouter:
                         "application/zip": PDF_CONTENT,
                     },
                 },
-                404: SESSION_ERROR,
+                404: DOCUMENT_ERROR,
                 422: VALIDATION_ERROR,
                 500: PDF_ERROR,
             },
@@ -194,7 +210,7 @@ class ApiRouter:
         try:
             selected_type = DocumentType(doc_type.upper())
         except ValueError as error:
-            raise YamlValidationError("Unknown document type.", 1, 1) from error
+            raise UnknownDocumentTypeError(f"Unknown document type: {doc_type}.") from error
         document = next(
             (item for item in session.documents if item.document_type == selected_type), None
         )

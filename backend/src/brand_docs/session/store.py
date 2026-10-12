@@ -1,5 +1,6 @@
-"""Thread-safe in-memory session store with expiry."""
+"""Thread-safe in-memory session store with sliding expiry."""
 
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from threading import RLock
 
@@ -30,21 +31,25 @@ class Session(BaseModel):
     check_results: list[CheckResult] = Field(default_factory=list)
     logo: BrandLogo | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    last_accessed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class SessionStore:
-    """Store active user work in memory until its TTL expires."""
+    """Store active user work in memory until it goes unused for longer than its TTL."""
 
-    def __init__(self, ttl: timedelta) -> None:
+    def __init__(self, ttl: timedelta, clock: Callable[[], datetime] | None = None) -> None:
         self.sessions: dict[str, Session] = {}
         self.ttl = ttl
+        self.clock = clock or (lambda: datetime.now(UTC))
         self.lock = RLock()
 
     def _purge_expired(self) -> None:
         with self.lock:
-            now = datetime.now(UTC)
+            now = self.clock()
             expired = [
-                key for key, session in self.sessions.items() if now - session.created_at > self.ttl
+                key
+                for key, session in self.sessions.items()
+                if now - session.last_accessed_at > self.ttl
             ]
             for key in expired:
                 del self.sessions[key]
@@ -52,6 +57,7 @@ class SessionStore:
     def create(self, session: Session) -> str:
         with self.lock:
             self._purge_expired()
+            session.last_accessed_at = self.clock()
             self.sessions[session.session_id] = session
         return session.session_id
 
@@ -61,6 +67,7 @@ class SessionStore:
             session = self.sessions.get(session_id)
             if session is None:
                 raise SessionNotFoundError("Session was not found or has expired.")
+            session.last_accessed_at = self.clock()
             return session
 
     def set_logo(self, session_id: str, logo: BrandLogo | None) -> None:

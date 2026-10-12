@@ -2,6 +2,7 @@
 
 from brand_docs.domain.enums import DocumentType, UnitKind
 from brand_docs.domain.models import BrandData, Grouping, GroupingEntry
+from brand_docs.errors import UnknownGroupingSectionError
 from brand_docs.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -88,9 +89,7 @@ class DocumentGrouper:
         entries = [entry.model_copy(deep=True) for entry in grouping.entries]
         target = next((entry for entry in entries if entry.section == section), None)
         if target is None:
-            from brand_docs.errors import YamlValidationError
-
-            raise YamlValidationError("Unknown grouping section.", 1, 1)
+            raise UnknownGroupingSectionError(f"Unknown grouping section: {section}.")
         target.document_types = list(dict.fromkeys(document_types))
         target.changed_by_user = True
         return Grouping(entries=entries, confirmed_by_user=True)

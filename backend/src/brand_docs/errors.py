@@ -15,6 +15,14 @@ class YamlValidationError(BrandDocsError):
         self.column = column
 
 
+class UnknownGroupingSectionError(BrandDocsError):
+    """Grouping change refers to a section that is not in the session grouping."""
+
+
+class UnknownDocumentTypeError(BrandDocsError):
+    """Requested document type is not a known document type."""
+
+
 class SessionNotFoundError(BrandDocsError):
     """Requested session is missing or expired."""
 

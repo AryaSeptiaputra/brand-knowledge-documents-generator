@@ -34,4 +34,20 @@ describe("YamlEditor", () => {
     );
     expect(document.querySelector(".yaml-error-line")).toBeInTheDocument();
   });
+
+  it("marks the character at the server column", () => {
+    render(
+      <YamlEditor
+        errors={[{ message: "Unexpected value", line: 2, column: 3 }]}
+        onChange={() => {}}
+        onClear={() => {}}
+        onSample={() => {}}
+        value={"brand: Kaos Rimba\nretur: [\n"}
+      />,
+    );
+    const marks = document.querySelectorAll(".yaml-error-column");
+    expect(marks).toHaveLength(1);
+    expect(marks[0]).toHaveTextContent("t");
+    expect(marks[0]?.closest(".yaml-error-line")).not.toBeNull();
+  });
 });

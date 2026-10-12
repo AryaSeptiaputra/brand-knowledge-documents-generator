@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import {
   type CheckResult,
@@ -6,10 +6,9 @@ import {
   documentLabels,
   downloadDocument,
   fetchPreview,
-  removeLogo,
-  uploadLogo,
 } from "../../api/client";
 import { Button } from "../../components/ui/Button";
+import { useLogo } from "./useLogo";
 
 export function PreviewScreen({
   sessionId,
@@ -26,33 +25,14 @@ export function PreviewScreen({
 }) {
   const [selectedType, setSelectedType] = useState(types[0] ?? "POLICY");
   const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [logoName, setLogoName] = useState<string | null>(null);
   const [showSources, setShowSources] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
-  const queryClient = useQueryClient();
   const previewQuery = useQuery({
     queryKey: ["preview", sessionId, selectedType],
     queryFn: () => fetchPreview(sessionId, selectedType),
     enabled: types.includes(selectedType),
   });
-  const logoMutation = useMutation({
-    mutationFn: (file: File) => uploadLogo(sessionId, file),
-    onSuccess: async (_, file) => {
-      setLogoFile(null);
-      setLogoName(file.name);
-      await queryClient.invalidateQueries({ queryKey: ["preview", sessionId] });
-    },
-    onError: (error) => onError(error.message),
-  });
-  const removeMutation = useMutation({
-    mutationFn: () => removeLogo(sessionId),
-    onSuccess: async () => {
-      setLogoFile(null);
-      setLogoName(null);
-      await queryClient.invalidateQueries({ queryKey: ["preview", sessionId] });
-    },
-    onError: (error) => onError(error.message),
-  });
+  const { logoName, upload: logoMutation, remove: removeMutation } = useLogo(sessionId, onError);
   const downloadMutation = useMutation({
     mutationFn: (type: DocumentType | "all") => downloadDocument(sessionId, type),
     onError: (error) => onError(error.message),
@@ -66,6 +46,18 @@ export function PreviewScreen({
     const firstType = types.at(0);
     if (firstType && !types.includes(selectedType)) setSelectedType(firstType);
   }, [selectedType, types]);
+
+  if (types.length === 0) {
+    return (
+      <main className="main-content preview-main">
+        <div className="error-banner" role="alert">
+          No documents were generated. Make sure at least one data section is included in a
+          document.
+          <Button onClick={onFixData}>Fix data</Button>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="main-content preview-main">
@@ -172,7 +164,9 @@ export function PreviewScreen({
               </Button>
               <Button
                 disabled={!logoFile || logoMutation.isPending}
-                onClick={() => logoFile && logoMutation.mutate(logoFile)}
+                onClick={() =>
+                  logoFile && logoMutation.mutate(logoFile, { onSuccess: () => setLogoFile(null) })
+                }
                 variant="primary"
               >
                 {logoMutation.isPending ? "Uploading…" : "Upload"}
@@ -180,7 +174,9 @@ export function PreviewScreen({
               {logoName && (
                 <Button
                   disabled={removeMutation.isPending}
-                  onClick={() => removeMutation.mutate()}
+                  onClick={() =>
+                    removeMutation.mutate(undefined, { onSuccess: () => setLogoFile(null) })
+                  }
                   variant="ghost"
                 >
                   Remove

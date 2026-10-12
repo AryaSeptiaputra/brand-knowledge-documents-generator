@@ -16,10 +16,10 @@ class OllamaClient:
     """Call the configured local Ollama model."""
 
     def __init__(self, settings: Settings) -> None:
-        if settings.ollama_host:
-            self.client = Client(host=settings.ollama_host)
-        else:
-            self.client = Client()
+        # An empty host lets the Ollama library fall back to OLLAMA_HOST or its default.
+        self.client = Client(
+            host=settings.ollama_host or None, timeout=settings.ollama_timeout_seconds
+        )
         self.settings = settings
 
     def generate(self, prompt: str, schema: type[T]) -> T:

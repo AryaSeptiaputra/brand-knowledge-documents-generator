@@ -118,7 +118,7 @@ Endpoints (all under `/api`), matching the per-module sequence diagram:
 
 ## 6. Sessions and logo
 
-- `SessionStore` is in-memory with a TTL (default 60 minutes, from `Settings`). No database, no session files on disk. Its instance is created in `factory.py` and injected.
+- `SessionStore` is in-memory with a sliding TTL (default 60 minutes, from `Settings`): every successful `get` refreshes the last-access time, and a session is removed once it has not been accessed for the TTL. There is no absolute maximum lifetime. No database, no session files on disk. Its instance is created in `factory.py` and injected.
 - The logo is stored as a `BrandLogo` inside the `Session` (bytes in memory). Size limit from `Settings.max_logo_bytes`; only PNG, JPEG, and SVG are accepted — check the file content, not just the extension. SVGs are sanitized (remove `<script>`, `on*` attributes, external references) before use.
 - The logo is uploaded on the Preview & download screen, applies to all documents, and needs no re-generation.
 

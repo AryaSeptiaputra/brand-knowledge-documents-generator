@@ -334,7 +334,7 @@ export interface operations {
           "application/json": components["schemas"]["AnalyzeResponse"];
         };
       };
-      /** @description The submitted data or document type is invalid. */
+      /** @description The submitted data is invalid. */
       422: {
         headers: {
           [name: string]: unknown;
@@ -376,7 +376,7 @@ export interface operations {
           "application/json": components["schemas"]["ErrorResponse"];
         };
       };
-      /** @description The submitted data or document type is invalid. */
+      /** @description The submitted grouping change is invalid or names an unknown section. */
       422: {
         headers: {
           [name: string]: unknown;
@@ -442,16 +442,16 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Successful Response */
+      /** @description The document preview as HTML. */
       200: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          "application/json": unknown;
+          "text/html": string;
         };
       };
-      /** @description The requested session or document was not found. */
+      /** @description The session, document type, or generated document was not found. */
       404: {
         headers: {
           [name: string]: unknown;
@@ -460,7 +460,7 @@ export interface operations {
           "application/json": components["schemas"]["ErrorResponse"];
         };
       };
-      /** @description The submitted data or document type is invalid. */
+      /** @description The submitted data is invalid. */
       422: {
         headers: {
           [name: string]: unknown;
@@ -494,7 +494,7 @@ export interface operations {
           "application/zip": string;
         };
       };
-      /** @description The requested session or document was not found. */
+      /** @description The session, document type, or generated document was not found. */
       404: {
         headers: {
           [name: string]: unknown;
@@ -503,7 +503,7 @@ export interface operations {
           "application/json": components["schemas"]["ErrorResponse"];
         };
       };
-      /** @description The submitted data or document type is invalid. */
+      /** @description The submitted data is invalid. */
       422: {
         headers: {
           [name: string]: unknown;
@@ -562,7 +562,7 @@ export interface operations {
           "application/json": components["schemas"]["ErrorResponse"];
         };
       };
-      /** @description The submitted data or document type is invalid. */
+      /** @description The submitted data is invalid. */
       422: {
         headers: {
           [name: string]: unknown;

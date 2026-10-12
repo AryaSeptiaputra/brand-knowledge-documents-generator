@@ -1,125 +1,41 @@
-import { useMutation } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-import {
-  type AnalyzeResponse,
-  api,
-  type CheckResult,
-  type DocumentType,
-  documentTypes,
-  type ErrorDetail,
-  type GenerateResponse,
-  type Grouping,
-} from "./api/client";
+import { useState } from "react";
 import { type Step, Stepper } from "./components/Stepper";
 import { Button } from "./components/ui/Button";
 import { GeneratingStatus } from "./features/generate/GeneratingStatus";
 import { PreviewScreen } from "./features/preview/PreviewScreen";
 import { GroupingReview } from "./features/review-grouping/GroupingReview";
+import { useBrandWorkflow } from "./features/workflow/useBrandWorkflow";
 import { YamlEditor } from "./features/write-data/YamlEditor";
 import { sampleYaml } from "./lib/sampleYaml";
-
-type WorkflowData = AnalyzeResponse & { checks?: CheckResult[] };
 
 export function App() {
   const [yamlText, setYamlText] = useState("");
   const [step, setStep] = useState<Step>("write");
-  const [workflow, setWorkflow] = useState<WorkflowData | null>(null);
-  const [grouping, setGrouping] = useState<Grouping | null>(null);
-  const [yamlErrors, setYamlErrors] = useState<ErrorDetail[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
-  const [generationError, setGenerationError] = useState<string | null>(null);
-
-  const analyzeMutation = useMutation({
-    mutationFn: async (): Promise<AnalyzeResponse> => {
-      const { data, error, response } = await api.POST("/api/analyze", {
-        body: { yaml: yamlText },
-      });
-      if (error) {
-        if (response.status === 422 && "errors" in error) setYamlErrors(error.errors ?? []);
-        throw new Error(getApiMessage(error));
-      }
-      return data;
-    },
-    onSuccess: (data) => {
-      setWorkflow(data);
-      setGrouping(data.grouping);
-      setYamlErrors([]);
-      setNotice(null);
-      setStep("review");
-    },
-    onError: (error) => setNotice(error.message),
+  const workflow = useBrandWorkflow({
+    onAnalyzed: () => setStep("review"),
+    onGenerated: () => setStep("preview"),
+    onNotice: setNotice,
   });
-
-  const groupingMutation = useMutation({
-    mutationFn: async ({
-      section,
-      type,
-      selected,
-    }: {
-      section: string;
-      type: DocumentType;
-      selected: boolean;
-    }) => {
-      if (!workflow || !grouping) throw new Error("Analyze the data before changing its grouping.");
-      const entry = grouping.entries.find((item) => item.section === section);
-      if (!entry) throw new Error("This data section is no longer available.");
-      const nextTypes = selected
-        ? [...new Set([...entry.document_types, type])]
-        : entry.document_types.filter((item) => item !== type);
-      const { data, error, response } = await api.PATCH("/api/grouping", {
-        body: { session_id: workflow.session_id, section, document_types: nextTypes },
-      });
-      if (error) throw new Error(getApiMessage(error));
-      if (response.status === 404) throw new Error("Your session expired. Submit your data again.");
-      return data;
-    },
-    onSuccess: (data) => {
-      setGrouping(data);
-      setNotice(null);
-    },
-    onError: (error) => setNotice(error.message),
-  });
-
-  const generateMutation = useMutation({
-    mutationFn: async (): Promise<GenerateResponse> => {
-      if (!workflow) throw new Error("Analyze the data before generating documents.");
-      const { data, error } = await api.POST("/api/documents", {
-        body: { session_id: workflow.session_id },
-      });
-      if (error) throw new Error(getApiMessage(error));
-      return data;
-    },
-    onSuccess: (data) => {
-      setWorkflow((previous) =>
-        previous ? { ...previous, checks: data.check_results } : previous,
-      );
-      setGenerationError(null);
-      setNotice(null);
-      setStep("preview");
-    },
-    onError: (error) => setGenerationError(error.message),
-  });
-
-  const activeTypes = useMemo(() => {
-    const selected = new Set(grouping?.entries.flatMap((entry) => entry.document_types) ?? []);
-    return documentTypes.filter((type) => selected.has(type));
-  }, [grouping]);
+  const { session, grouping, generated, yamlErrors } = workflow;
+  const analyzeMutation = workflow.analyze;
+  const groupingMutation = workflow.changeGrouping;
+  const generateMutation = workflow.generate;
+  const generationError = generateMutation.error?.message ?? null;
 
   function handleAnalyze(): void {
     setNotice(null);
-    setYamlErrors([]);
-    analyzeMutation.mutate();
+    analyzeMutation.mutate(yamlText);
   }
 
   function startGenerate(): void {
     setStep("preview");
-    setGenerationError(null);
     generateMutation.mutate();
   }
 
   function goBackToData(): void {
     setStep("write");
-    setYamlErrors([]);
+    analyzeMutation.reset();
     setNotice(null);
   }
 
@@ -167,11 +83,11 @@ export function App() {
                 onChange={setYamlText}
                 onClear={() => {
                   setYamlText("");
-                  setYamlErrors([]);
+                  analyzeMutation.reset();
                 }}
                 onSample={() => {
                   setYamlText(sampleYaml);
-                  setYamlErrors([]);
+                  analyzeMutation.reset();
                   setNotice(null);
                 }}
                 value={yamlText}
@@ -220,9 +136,9 @@ export function App() {
           </div>
         </main>
       )}
-      {step === "review" && workflow && grouping && (
+      {step === "review" && session && grouping && (
         <GroupingReview
-          brandName={workflow.brand_name}
+          brandName={session.brand_name}
           busy={groupingMutation.isPending}
           sectionCount={grouping.entries.length}
           grouping={grouping}
@@ -239,10 +155,12 @@ export function App() {
                 .map((item) => item.section.split(".").slice(0, 2).join(".")),
             ).size
           }
-          suggestions={workflow.suggestions ?? []}
+          suggestions={session.suggestions ?? []}
         />
       )}
-      {generateMutation.isPending && <GeneratingStatus activeTypes={activeTypes} error={null} />}
+      {generateMutation.isPending && (
+        <GeneratingStatus activeTypes={workflow.expectedTypes} error={null} />
+      )}
       {step === "preview" && !generateMutation.isPending && generationError && (
         <main className="generating-page">
           <section className="generating-card">
@@ -262,23 +180,16 @@ export function App() {
       {step === "preview" &&
         !generateMutation.isPending &&
         !generationError &&
-        workflow?.checks && (
+        session &&
+        generated && (
           <PreviewScreen
-            checks={workflow.checks}
+            checks={generated.check_results}
             onError={showError}
             onFixData={goBackToData}
-            sessionId={workflow.session_id}
-            types={activeTypes}
+            sessionId={session.session_id}
+            types={workflow.generatedTypes}
           />
         )}
     </div>
   );
-}
-
-function getApiMessage(error: unknown): string {
-  if (typeof error === "object" && error !== null && "errors" in error) {
-    const errors = (error as { errors?: { message: string }[] }).errors;
-    if (errors?.length) return errors.map((item) => item.message).join(" ");
-  }
-  return "The request could not be completed. Check the server and try again.";
 }

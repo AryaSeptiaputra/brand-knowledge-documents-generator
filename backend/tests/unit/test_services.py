@@ -1,7 +1,7 @@
 """Unit coverage for YAML services, grouping, fallback, and content checks."""
 
 import sys
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -283,7 +283,7 @@ def test_ollama_client_validates_structured_output(monkeypatch: pytest.MonkeyPat
         '{"heading":"Retur","paragraphs":[{"text":"Ikuti ketentuan retur.",'
         '"source_paths":["retur.syarat"]}]}'
     )
-    monkeypatch.setattr("brand_docs.llm.ollama_client.Client", lambda: runner)
+    monkeypatch.setattr("brand_docs.llm.ollama_client.Client", lambda **_: runner)
 
     output = OllamaClient(Settings()).generate("prompt", ComposedSection)
 
@@ -291,9 +291,23 @@ def test_ollama_client_validates_structured_output(monkeypatch: pytest.MonkeyPat
     assert output.paragraphs[0].source_paths == ["retur.syarat"]
 
 
+def test_ollama_client_forwards_host_and_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    received: dict[str, object] = {}
+
+    def fake_client(**kwargs: object) -> FakeOllamaRunner:
+        received.update(kwargs)
+        return FakeOllamaRunner("{}")
+
+    monkeypatch.setattr("brand_docs.llm.ollama_client.Client", fake_client)
+
+    OllamaClient(Settings(ollama_host="http://ollama:11434", ollama_timeout_seconds=30))
+
+    assert received == {"host": "http://ollama:11434", "timeout": 30}
+
+
 def test_ollama_client_maps_invalid_json(monkeypatch: pytest.MonkeyPatch) -> None:
     runner = FakeOllamaRunner("not-json")
-    monkeypatch.setattr("brand_docs.llm.ollama_client.Client", lambda: runner)
+    monkeypatch.setattr("brand_docs.llm.ollama_client.Client", lambda **_: runner)
 
     with pytest.raises(LlmOutputError):
         OllamaClient(Settings()).generate("prompt", ComposedSection)
@@ -301,7 +315,7 @@ def test_ollama_client_maps_invalid_json(monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_ollama_client_maps_connection_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     runner = FakeOllamaRunner(ConnectionError("unavailable"))
-    monkeypatch.setattr("brand_docs.llm.ollama_client.Client", lambda: runner)
+    monkeypatch.setattr("brand_docs.llm.ollama_client.Client", lambda **_: runner)
 
     with pytest.raises(LlmUnavailableError):
         OllamaClient(Settings()).generate("prompt", ComposedSection)
@@ -325,13 +339,16 @@ def test_product_and_size_rows_do_not_duplicate_facts(brand_data) -> None:
     assert all(path.startswith("product.kaos boxy.size.") for path in size_paths)
 
 
-def test_fact_mapped_to_multiple_types_appears_in_each_document(brand_data) -> None:
+def test_fact_mapped_to_multiple_types_appears_in_each_document(fact_in_two_documents) -> None:
     documents = DocumentComposer(UnusedLlm(), use_llm=False, max_retries=1).compose(
-        brand_data, DocumentGrouper().propose(brand_data)
+        fact_in_two_documents, DocumentGrouper().propose(fact_in_two_documents)
     )
     size_paths = {
-        fact.path for fact in brand_data.facts if fact.path.startswith("product.kaos boxy.size.")
+        fact.path
+        for fact in fact_in_two_documents.facts
+        if fact.path.startswith("product.kaos boxy.size.")
     }
+    assert size_paths
 
     for doc_type in (DocumentType.PRODUCT_KNOWLEDGE, DocumentType.GUIDE):
         document = next(doc for doc in documents if doc.document_type == doc_type)
@@ -507,6 +524,44 @@ def test_session_store_expires_sessions() -> None:
 
     with pytest.raises(SessionNotFoundError):
         store.get("expired")
+
+
+class ManualClock:
+    def __init__(self) -> None:
+        self.now = datetime(2026, 1, 1, tzinfo=UTC)
+
+    def __call__(self) -> datetime:
+        return self.now
+
+
+def _example_session(session_id: str) -> Session:
+    brand = BrandData(brand_name="Example", raw_yaml="brand: Example", facts=[])
+    return Session(session_id=session_id, brand=brand, grouping=Grouping(entries=[]))
+
+
+def test_session_store_keeps_sessions_that_are_accessed() -> None:
+    clock = ManualClock()
+    store = SessionStore(ttl=timedelta(minutes=60), clock=clock)
+    store.create(_example_session("active"))
+
+    for _ in range(3):
+        clock.now += timedelta(minutes=50)
+        assert store.get("active").session_id == "active"
+
+
+def test_session_store_expires_sessions_left_unused() -> None:
+    clock = ManualClock()
+    store = SessionStore(ttl=timedelta(minutes=60), clock=clock)
+    store.create(_example_session("active"))
+    store.create(_example_session("idle"))
+
+    clock.now += timedelta(minutes=50)
+    store.get("active")
+    clock.now += timedelta(minutes=20)
+
+    assert store.get("active").session_id == "active"
+    with pytest.raises(SessionNotFoundError):
+        store.get("idle")
 
 
 def test_checker_drops_fabricated_paragraphs(brand_data) -> None:

@@ -23,8 +23,12 @@ const analyzed = {
   suggestions: [{ message: "Add warranty details", related_path: "garansi" }],
 };
 
+function documentOf(type: "POLICY" | "GUIDE" | "PRODUCT_KNOWLEDGE") {
+  return { document_type: type, title: type, brand_name: "Kaos Rimba", sections: [] };
+}
+
 const generated = {
-  documents: [],
+  documents: [documentOf("POLICY")],
   check_results: [
     {
       document_type: "POLICY" as const,
@@ -45,6 +49,17 @@ function renderApp() {
       <App />
     </QueryClientProvider>,
   );
+}
+
+function requestUrl(input: Request | string): string {
+  return input instanceof Request ? input.url : String(input);
+}
+
+function requests(): { url: string; method: string }[] {
+  return vi.mocked(fetch).mock.calls.map(([input, init]) => ({
+    url: requestUrl(input as Request | string),
+    method: input instanceof Request ? input.method : (init?.method ?? "GET"),
+  }));
 }
 
 function response<T>(data: T) {
@@ -70,11 +85,14 @@ describe("App workflow", () => {
     );
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input, init) => {
-        const url = String(input);
-        if (url.includes("/api/logo") && init?.method === "PUT")
-          return new Response("{}", { headers: { "Content-Type": "application/json" } });
-        if (url.includes("/api/logo") && init?.method === "DELETE")
+      vi.fn(async (input: Request | string, init?: RequestInit) => {
+        const url = requestUrl(input);
+        const method = input instanceof Request ? input.method : init?.method;
+        if (url.includes("/api/logo") && method === "PUT")
+          return new Response('{"file_name":"brand.png","media_type":"image/png"}', {
+            headers: { "Content-Type": "application/json" },
+          });
+        if (url.includes("/api/logo") && method === "DELETE")
           return new Response(null, { status: 204 });
         if (url.includes("/api/documents/") && url.endsWith("/pdf?session_id=session-1"))
           return new Response("%PDF-fake");
@@ -104,9 +122,10 @@ describe("App workflow", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Download PDF" }));
     await waitFor(() =>
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/documents/policy/pdf?session_id=session-1"),
-      ),
+      expect(requests()).toContainEqual({
+        url: expect.stringContaining("/api/documents/policy/pdf?session_id=session-1"),
+        method: "GET",
+      }),
     );
     expect(await screen.findByText("100%")).toBeInTheDocument();
   });
@@ -131,16 +150,21 @@ describe("App workflow", () => {
     fireEvent.change(screen.getByLabelText("Brand logo file"), { target: { files: [file] } });
     fireEvent.click(screen.getByRole("button", { name: "Upload" }));
     expect(await screen.findByText("Applied to all documents")).toBeInTheDocument();
-    expect(fetch).toHaveBeenCalledWith(
-      "/api/logo?session_id=session-1",
-      expect.objectContaining({ method: "PUT" }),
-    );
+    expect(requests()).toContainEqual({
+      url: expect.stringContaining("/api/logo?session_id=session-1"),
+      method: "PUT",
+    });
+    const upload = vi
+      .mocked(fetch)
+      .mock.calls.map(([input]) => input)
+      .find((input): input is Request => input instanceof Request && input.method === "PUT");
+    expect(upload?.headers.get("content-type")).toMatch(/^multipart\/form-data/);
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     await waitFor(() =>
-      expect(fetch).toHaveBeenCalledWith(
-        "/api/logo?session_id=session-1",
-        expect.objectContaining({ method: "DELETE" }),
-      ),
+      expect(requests()).toContainEqual({
+        url: expect.stringContaining("/api/logo?session_id=session-1"),
+        method: "DELETE",
+      }),
     );
   });
 
@@ -166,5 +190,86 @@ describe("App workflow", () => {
     expect(await screen.findByText("Add warranty details")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Back to data" }));
     expect(screen.getByRole("heading", { name: "Write your brand data" })).toBeInTheDocument();
+  });
+
+  it("shows preview tabs only for documents the backend generated", async () => {
+    const sizeOnly = {
+      ...analyzed,
+      grouping: {
+        entries: [
+          {
+            section: "product.kaos boxy",
+            unit_kind: "PRODUCT" as const,
+            document_types: ["PRODUCT_KNOWLEDGE" as const],
+            changed_by_user: false,
+          },
+          {
+            section: "product.kaos boxy.size",
+            unit_kind: "PRODUCT_SIZE" as const,
+            document_types: ["GUIDE" as const],
+            changed_by_user: true,
+          },
+        ],
+        confirmed_by_user: true,
+      },
+    };
+    vi.mocked(api.POST).mockImplementation((path) => {
+      if (path === "/api/analyze") return Promise.resolve(response(sizeOnly)) as never;
+      return Promise.resolve(
+        response({
+          documents: [documentOf("GUIDE")],
+          check_results: [{ ...generated.check_results[0], document_type: "GUIDE" as const }],
+        }),
+      ) as never;
+    });
+    renderApp();
+    fireEvent.click(screen.getByRole("button", { name: "Use sample data" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check data and continue" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Generate documents" }));
+
+    expect(await screen.findByRole("tab", { name: "Guide" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Product Knowledge" })).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(requests()).toContainEqual({
+        url: expect.stringContaining("/api/documents/guide/preview?session_id=session-1"),
+        method: "GET",
+      }),
+    );
+    expect(requests().some(({ url }) => url.includes("/product_knowledge/preview"))).toBe(false);
+  });
+
+  it("shows located YAML errors once, without a global notice", async () => {
+    vi.mocked(api.POST).mockImplementationOnce(
+      () =>
+        Promise.resolve({
+          data: undefined,
+          error: { errors: [{ message: "Invalid indentation", line: 3, column: 5 }] },
+          response: new Response(null, { status: 422 }),
+        }) as never,
+    );
+    renderApp();
+    fireEvent.click(screen.getByRole("button", { name: "Use sample data" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check data and continue" }));
+    expect(await screen.findByText("Line 3, column 5: Invalid indentation")).toBeInTheDocument();
+    expect(document.querySelector(".global-notice")).toBeNull();
+    expect(screen.getByText("We couldn't read this YAML.")).toBeInTheDocument();
+  });
+
+  it("reports an expired session when changing the grouping", async () => {
+    vi.mocked(api.PATCH).mockImplementationOnce(
+      () =>
+        Promise.resolve({
+          data: undefined,
+          error: { errors: [{ message: "Session not found." }] },
+          response: new Response(null, { status: 404 }),
+        }) as never,
+    );
+    renderApp();
+    fireEvent.click(screen.getByRole("button", { name: "Use sample data" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check data and continue" }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Include retur in Guide" }));
+    expect(
+      await screen.findByText("Your session expired. Submit your data again."),
+    ).toBeInTheDocument();
   });
 });

@@ -13,32 +13,40 @@ import { useEffect, useRef } from "react";
 import type { ErrorDetail } from "../../api/client";
 import { Button } from "../../components/ui/Button";
 
-const setErrorLines = StateEffect.define<number[]>();
+type ErrorLocation = { line: number; column: number | null };
 
-const diagnosticsField = StateField.define<number[]>({
+const setErrorLocations = StateEffect.define<ErrorLocation[]>();
+
+const diagnosticsField = StateField.define<ErrorLocation[]>({
   create: () => [],
-  update: (lines, transaction) =>
+  update: (locations, transaction) =>
     transaction.effects.reduce(
-      (current, effect) => (effect.is(setErrorLines) ? effect.value : current),
-      transaction.docChanged ? [] : lines,
+      (current, effect) => (effect.is(setErrorLocations) ? effect.value : current),
+      transaction.docChanged ? [] : locations,
     ),
 });
 
-const errorLines = StateField.define<DecorationSet>({
+const errorLineMark = Decoration.line({ class: "yaml-error-line" });
+const errorColumnMark = Decoration.mark({ class: "yaml-error-column" });
+
+function toErrorDecorations(state: EditorState, location: ErrorLocation) {
+  const line = state.doc.line(Math.min(Math.max(location.line, 1), state.doc.lines));
+  const decorations = [errorLineMark.range(line.from)];
+  if (location.column == null || line.length === 0) return decorations;
+  // Columns are 1-based; a column past the line end marks the last character.
+  const from = line.from + Math.min(Math.max(location.column, 1) - 1, line.length - 1);
+  return [...decorations, errorColumnMark.range(from, from + 1)];
+}
+
+const errorDecorations = StateField.define<DecorationSet>({
   create: () => Decoration.none,
   update: (decorations, transaction) => {
-    const hasNewDiagnostics = transaction.effects.some((effect) => effect.is(setErrorLines));
+    const hasNewDiagnostics = transaction.effects.some((effect) => effect.is(setErrorLocations));
     if (!transaction.docChanged && !hasNewDiagnostics) return decorations;
     const diagnostics = transaction.state.field(diagnosticsField);
     return Decoration.set(
-      diagnostics.flatMap((line) => {
-        const lineNumber = Math.min(Math.max(line, 1), transaction.state.doc.lines);
-        return [
-          Decoration.line({ class: "yaml-error-line" }).range(
-            transaction.state.doc.line(lineNumber).from,
-          ),
-        ];
-      }),
+      diagnostics.flatMap((location) => toErrorDecorations(transaction.state, location)),
+      true,
     );
   },
   provide: (field) => EditorView.decorations.from(field),
@@ -77,7 +85,7 @@ export function YamlEditor({
           highlightActiveLine(),
           keymap.of([...defaultKeymap, indentWithTab]),
           diagnosticsField,
-          errorLines,
+          errorDecorations,
           EditorView.updateListener.of((update) => {
             if (update.docChanged) latestOnChange.current(update.state.doc.toString());
           }),
@@ -117,8 +125,10 @@ export function YamlEditor({
 
   useEffect(() => {
     view.current?.dispatch({
-      effects: setErrorLines.of(
-        errors.map((error) => error.line).filter((line): line is number => line != null),
+      effects: setErrorLocations.of(
+        errors.flatMap((error) =>
+          error.line == null ? [] : [{ line: error.line, column: error.column ?? null }],
+        ),
       ),
     });
   }, [errors]);

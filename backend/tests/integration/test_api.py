@@ -129,6 +129,11 @@ def test_openapi_documents_project_error_responses() -> None:
     assert analyze_error["content"]["application/json"]["schema"]["$ref"].endswith("/ErrorResponse")
     assert pdf_error["content"]["application/json"]["schema"]["$ref"].endswith("/ErrorResponse")
     assert set(pdf_responses["200"]["content"]) == {"application/pdf", "application/zip"}
+    preview_responses = schema["paths"]["/api/documents/{doc_type}/preview"]["get"]["responses"]
+    assert set(preview_responses["200"]["content"]) == {"text/html"}
+    assert preview_responses["404"]["content"]["application/json"]["schema"]["$ref"].endswith(
+        "/ErrorResponse"
+    )
 
 
 def _png_chunk(kind: bytes, data: bytes) -> bytes:
@@ -271,3 +276,44 @@ def test_openapi_documents_logo_multipart_body() -> None:
     logo_schema = body["content"]["multipart/form-data"]["schema"]
     assert body["required"] is True
     assert logo_schema["properties"]["logo"]["format"] == "binary"
+
+
+def test_grouping_change_with_unknown_section_returns_422() -> None:
+    app = create_app(Settings(use_llm=False))
+    with TestClient(app) as client:
+        session_id = _analyze_session(client)
+        response = client.patch(
+            "/api/grouping",
+            json={"session_id": session_id, "section": "tidak.ada", "document_types": ["GUIDE"]},
+        )
+
+    assert response.status_code == 422
+    assert response.json() == {"errors": [{"message": "Unknown grouping section: tidak.ada."}]}
+
+
+@pytest.mark.parametrize("path", ["preview", "pdf"])
+def test_unknown_document_type_returns_404(path: str) -> None:
+    app = create_app(Settings(use_llm=False))
+    with TestClient(app) as client:
+        session_id = _analyze_session(client)
+        client.post("/api/documents", json={"session_id": session_id})
+        response = client.get(f"/api/documents/BROCHURE/{path}", params={"session_id": session_id})
+
+    assert response.status_code == 404
+    assert response.json() == {"errors": [{"message": "Unknown document type: BROCHURE."}]}
+
+
+def test_unknown_api_path_returns_json_404_when_frontend_is_served(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    (tmp_path / "index.html").write_text("<html>app</html>", encoding="utf-8")
+    monkeypatch.setattr("brand_docs.main.FRONTEND_DIST", tmp_path)
+    app = create_app(Settings(use_llm=False))
+    with TestClient(app) as client:
+        missing = client.get("/api/tidak-ada")
+        page = client.get("/write")
+
+    assert missing.status_code == 404
+    assert missing.json() == {"errors": [{"message": "API endpoint not found."}]}
+    assert page.status_code == 200
+    assert "app" in page.text
