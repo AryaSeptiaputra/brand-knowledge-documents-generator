@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Review grouping</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2F5FA8}a:hover{color:#1F4580}
+</style>
+</helmet>
+<div style="min-height: 960px; background: #F4F4F2; color: #262624; font-family: 'IBM Plex Sans', system-ui, sans-serif; display: flex; flex-direction: column">
+
+  <header style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 32px; background: #FFFFFF; border-bottom: 1px solid #D6D6D2">
+    <div style="display: flex; align-items: center; gap: 12px">
+      <div style="width: 28px; height: 28px; border-radius: 6px; background: #BDBDB8"></div>
+      <span style="font-weight: 600; font-size: 15px">Brand Knowledge Document Generator</span>
+    </div>
+    <ol style="display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; font-size: 13px">
+      <li style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #E6E6E2; color: #4A4A46"><span style="font-weight: 600">1</span>Write data</li>
+      <li style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #262624; color: #FFFFFF"><span style="font-weight: 600">2</span>Review grouping</li>
+      <li style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #E6E6E2; color: #4A4A46"><span style="font-weight: 600">3</span>Preview &amp; download</li>
+    </ol>
+  </header>
+
+  <main style="flex-grow: 1; width: 100%; max-width: 1376px; margin: 0 auto; box-sizing: border-box; padding: 28px 32px; display: flex; flex-direction: column; gap: 20px">
+    <div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px">
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <h1 style="margin: 0; font-size: 24px; font-weight: 600">Review document grouping</h1>
+        <p style="margin: 0; font-size: 14px; color: #55554F">Choose which documents each data section goes into. One section can go into more than one document.</p>
+        <p style="margin: 0; font-size: 12px; color: #55554F">Suggested by rules: general sections → Policy; names like <code style="font-family: 'IBM Plex Mono', monospace">cara</code>, <code style="font-family: 'IBM Plex Mono', monospace">panduan</code>, <code style="font-family: 'IBM Plex Mono', monospace">perawatan</code> also → Guide; products → Product Knowledge; size tables also → Guide.</p>
+      </div>
+      <dl style="display: flex; gap: 24px; margin: 0; font-size: 13px">
+        <div><dt style="color: #55554F">Brand</dt><dd style="margin: 2px 0 0; font-weight: 600">[BRAND NAME]</dd></div>
+        <div><dt style="color: #55554F">Facts</dt><dd style="margin: 2px 0 0; font-weight: 600">[n]</dd></div>
+        <div><dt style="color: #55554F">Products</dt><dd style="margin: 2px 0 0; font-weight: 600">[n]</dd></div>
+      </dl>
+    </div>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+
+      <section aria-label="Document grouping" style="flex: 999 1 560px; min-width: 0; background: #FFFFFF; border: 1px solid #D6D6D2; border-radius: 10px; overflow: hidden">
+        <div style="overflow-x: auto">
+          <table style="width: 100%; min-width: 640px; border-collapse: collapse; font-size: 14px">
+            <thead>
+              <tr style="background: #FAFAF8; text-align: left; font-size: 12px; color: #4A4A46">
+                <th scope="col" style="padding: 12px 16px; font-weight: 600; border-bottom: 1px solid #E6E6E2">Data section</th>
+                <th scope="col" style="padding: 12px 16px; font-weight: 600; border-bottom: 1px solid #E6E6E2">Kind</th>
+                <th scope="col" style="padding: 12px 16px; font-weight: 600; border-bottom: 1px solid #E6E6E2; text-align: center">Policy</th>
+                <th scope="col" style="padding: 12px 16px; font-weight: 600; border-bottom: 1px solid #E6E6E2; text-align: center">Guide</th>
+                <th scope="col" style="padding: 12px 16px; font-weight: 600; border-bottom: 1px solid #E6E6E2; text-align: center">Product Knowledge</th>
+              </tr>
+            </thead>
+            <tbody>
+              <sc-for list="{{rows}}" as="row" hint-placeholder-count="6">
+                <tr style="border-bottom: 1px solid #EDEDEA">
+                  <th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 400">
+                    <div style="display: flex; align-items: center; gap: 10px">
+                      <sc-if value="{{row.hasName}}" hint-placeholder-val="{{true}}">
+                        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; padding-left: {{row.indent}}">{{row.name}}</span>
+                      </sc-if>
+                      <sc-if value="{{row.noName}}" hint-placeholder-val="{{false}}">
+                        <span style="display: block; height: 10px; width: {{row.w}}; border-radius: 4px; background: #E2E2DE"></span>
+                      </sc-if>
+                      <sc-if value="{{row.changed}}" hint-placeholder-val="{{false}}">
+                        <span style="font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #E3ECF8; color: #1F4580">changed</span>
+                      </sc-if>
+                      <sc-if value="{{row.none}}" hint-placeholder-val="{{false}}">
+                        <span style="font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #FBE3DF; color: #7A1F12">not in any document</span>
+                      </sc-if>
+                    </div>
+                  </th>
+                  <td style="padding: 14px 16px"><span style="font-size: 12px; padding: 3px 10px; border-radius: 999px; background: #EDEDEA; color: #3A3A36">{{row.kind}}</span></td>
+                  <td style="padding: 6px 16px; text-align: center"><input type="checkbox" checked="{{row.policy}}" onChange="{{row.togglePolicy}}" aria-label="Include in Policy" style="width: 20px; height: 20px; accent-color: #262624; cursor: pointer"></td>
+                  <td style="padding: 6px 16px; text-align: center"><input type="checkbox" checked="{{row.guide}}" onChange="{{row.toggleGuide}}" aria-label="Include in Guide" style="width: 20px; height: 20px; accent-color: #262624; cursor: pointer"></td>
+                  <td style="padding: 6px 16px; text-align: center"><input type="checkbox" checked="{{row.pk}}" onChange="{{row.togglePk}}" aria-label="Include in Product Knowledge" style="width: 20px; height: 20px; accent-color: #262624; cursor: pointer"></td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <aside style="flex: 1 1 320px; min-width: 0; background: #FFFFFF; border: 1px solid #D6D6D2; border-radius: 10px; padding: 18px; display: flex; flex-direction: column; gap: 12px">
+        <div style="display: flex; flex-direction: column; gap: 4px">
+          <h2 style="margin: 0; font-size: 15px; font-weight: 600">Completeness suggestions</h2>
+          <p style="margin: 0; font-size: 12px; color: #55554F">Shown to you only. Not included in the documents.</p>
+        </div>
+        <ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px">
+          <sc-for list="{{suggestions}}" as="s" hint-placeholder-count="3">
+            <li style="display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 8px; background: #FAFAF8; border: 1px solid #EDEDEA">
+              <span style="display: block; height: 8px; width: {{s.w1}}; border-radius: 4px; background: #E2E2DE"></span>
+              <span style="display: block; height: 8px; width: {{s.w2}}; border-radius: 4px; background: #E2E2DE"></span>
+              <code style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #4A4A46">{{s.path}}</code>
+            </li>
+          </sc-for>
+        </ul>
+        <a href="Main.dc.html" style="font-size: 13px">Edit data to add missing facts</a>
+      </aside>
+
+    </div>
+
+    <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-top: 4px">
+      <a href="Main.dc.html" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; border-radius: 8px; border: 1px solid #C9C9C5; background: #FFFFFF; color: #262624; font-size: 14px; text-decoration: none">Back to data</a>
+      <a href="Generating.dc.html" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 22px; border-radius: 8px; background: #262624; color: #FFFFFF; font-size: 14px; font-weight: 500; text-decoration: none">Generate documents</a>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+  baseRows() {
+    const row = (name, w, kind, policy, guide, pk, indent) => ({ name, w, kind, policy, guide, pk, indent: indent || '0px', changed: false });
+    return [
+      row('retur', '', 'General', true, false, false),
+      row('pengiriman', '', 'General', true, false, false),
+      row('', '30%', 'General · guide keyword', true, true, false),
+      row('product › kaos boxy', '', 'Product', false, false, true),
+      row('› size', '', 'Product size', false, true, true, '20px'),
+      row('', '26%', 'Product', false, false, true)
+    ];
+  }
+  currentRows() {
+    return (this.state && this.state.rows) || this.baseRows();
+  }
+  toggle(i, key) {
+    const rows = this.currentRows().map((r, j) => (j === i ? { ...r, [key]: !r[key], changed: true } : r));
+    this.setState({ rows });
+  }
+  renderVals() {
+    const rows = this.currentRows().map((r, i) => ({
+      ...r, hasName: !!r.name, noName: !r.name, none: !r.policy && !r.guide && !r.pk,
+      togglePolicy: () => this.toggle(i, 'policy'),
+      toggleGuide: () => this.toggle(i, 'guide'),
+      togglePk: () => this.toggle(i, 'pk')
+    }));
+    const suggestions = [
+      { w1: '92%', w2: '60%', path: 'pembayaran' },
+      { w1: '84%', w2: '48%', path: 'garansi' },
+      { w1: '88%', w2: '54%', path: 'product.kaos boxy.warna' }
+    ];
+    return { rows, suggestions, yes: true };
+  }
+}
+</script>
+</body>
+</html>

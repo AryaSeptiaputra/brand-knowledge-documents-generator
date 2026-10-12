@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Generating documents</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2F5FA8}a:hover{color:#1F4580}
+</style>
+</helmet>
+<div style="min-height: 960px; background: #F4F4F2; color: #262624; font-family: 'IBM Plex Sans', system-ui, sans-serif; display: flex; flex-direction: column">
+
+  <header style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 32px; background: #FFFFFF; border-bottom: 1px solid #D6D6D2">
+    <div style="display: flex; align-items: center; gap: 12px">
+      <div style="width: 28px; height: 28px; border-radius: 6px; background: #BDBDB8"></div>
+      <span style="font-weight: 600; font-size: 15px">Brand Knowledge Document Generator</span>
+    </div>
+    <ol style="display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; font-size: 13px">
+      <li style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #E6E6E2; color: #4A4A46"><span style="font-weight: 600">1</span>Write data</li>
+      <li style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #E6E6E2; color: #4A4A46"><span style="font-weight: 600">2</span>Review grouping</li>
+      <li style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #262624; color: #FFFFFF"><span style="font-weight: 600">3</span>Preview &amp; download</li>
+    </ol>
+  </header>
+
+  <main style="flex-grow: 1; width: 100%; box-sizing: border-box; padding: 64px 24px; display: flex; justify-content: center; align-items: flex-start">
+    <section aria-live="polite" style="width: 100%; max-width: 560px; background: #FFFFFF; border: 1px solid #D6D6D2; border-radius: 12px; padding: 28px; display: flex; flex-direction: column; gap: 22px">
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <h1 style="margin: 0; font-size: 22px; font-weight: 600">Generating documents</h1>
+        <p style="margin: 0; font-size: 14px; color: #55554F">Each section is written from your data, then checked against it. This can take a few minutes.</p>
+      </div>
+
+      <ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 16px">
+        <sc-for list="{{docs}}" as="d" hint-placeholder-count="3">
+          <li style="display: flex; flex-direction: column; gap: 8px">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px">
+              <span style="display: flex; align-items: center; gap: 10px">
+                <span style="width: 16px; height: 20px; border-radius: 3px; background: #D6D6D2"></span>
+                <span style="font-weight: 500">{{d.name}}</span>
+              </span>
+              <span style="font-size: 13px; color: #4A4A46">{{d.status}}</span>
+            </div>
+            <div role="progressbar" aria-label="{{d.name}} progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{d.pct}}" style="height: 8px; border-radius: 999px; background: #EDEDEA; overflow: hidden">
+              <div style="height: 100%; width: {{d.width}}; border-radius: 999px; background: #262624"></div>
+            </div>
+          </li>
+        </sc-for>
+      </ul>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px">
+        <sc-for list="{{phases}}" as="ph" hint-placeholder-count="3">
+          <span style="padding: 4px 10px; border-radius: 999px; background: {{ph.bg}}; color: {{ph.fg}}">{{ph.name}}</span>
+        </sc-for>
+      </div>
+
+      <sc-if value="{{done}}" hint-placeholder-val="{{false}}">
+        <div style="display: flex; justify-content: flex-end">
+          <a href="Preview.dc.html" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 22px; border-radius: 8px; background: #262624; color: #FFFFFF; font-size: 14px; font-weight: 500; text-decoration: none">View documents</a>
+        </div>
+      </sc-if>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+  componentDidMount() {
+    this.timer = setInterval(() => {
+      const t = (this.state && this.state.t) || 0;
+      if (t >= 36) { clearInterval(this.timer); return; }
+      this.setState({ t: t + 1 });
+    }, 140);
+  }
+  componentWillUnmount() {
+    clearInterval(this.timer);
+  }
+  renderVals() {
+    const t = (this.state && this.state.t) || 0;
+    const docs = ['Policy', 'Guide', 'Product Knowledge'].map((name, k) => {
+      const pct = Math.max(0, Math.min(100, (t - k * 10) * 10));
+      const status = pct === 0 ? 'Waiting' : pct < 100 ? 'Composing sections…' : 'Done';
+      return { name, pct, status, width: pct + '%' };
+    });
+    const phase = t < 30 ? 0 : t < 33 ? 1 : t < 36 ? 2 : 3;
+    const phases = ['Compose', 'Check content', 'Render preview'].map((name, i) => {
+      const active = i === phase;
+      const passed = i < phase;
+      return { name, bg: active ? '#262624' : passed ? '#D6D6D2' : '#EDEDEA', fg: active ? '#FFFFFF' : '#3A3A36' };
+    });
+    return { docs, phases, done: t >= 36 };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Format errors</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2F5FA8}a:hover{color:#1F4580}
+</style>
+</helmet>
+<div style="min-height: 960px; background: #F4F4F2; color: #262624; font-family: 'IBM Plex Sans', system-ui, sans-serif; display: flex; flex-direction: column">
+
+  <header style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 32px; background: #FFFFFF; border-bottom: 1px solid #D6D6D2">
+    <div style="display: flex; align-items: center; gap: 12px">
+      <div style="width: 28px; height: 28px; border-radius: 6px; background: #BDBDB8"></div>
+      <span style="font-weight: 600; font-size: 15px">Brand Knowledge Document Generator</span>
+    </div>
+    <ol style="display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; font-size: 13px">
+      <li style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #262624; color: #FFFFFF"><span style="font-weight: 600">1</span>Write data</li>
+      <li style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #E6E6E2; color: #4A4A46"><span style="font-weight: 600">2</span>Review grouping</li>
+      <li style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #E6E6E2; color: #4A4A46"><span style="font-weight: 600">3</span>Preview &amp; download</li>
+    </ol>
+  </header>
+
+  <main style="flex-grow: 1; width: 100%; max-width: 1376px; margin: 0 auto; box-sizing: border-box; padding: 28px 32px; display: flex; flex-direction: column; gap: 20px">
+    <sc-if value="{{hasErrors}}" hint-placeholder-val="{{true}}">
+      <div role="alert" style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 10px; background: #FBE3DF; color: #7A1F12; font-size: 14px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6"></path><path d="M12 16.5v.5"></path></svg>
+        <span style="font-weight: 600">[n] format errors</span>
+        <span>Fix the marked lines, then analyze again.</span>
+      </div>
+    </sc-if>
+    <sc-if value="{{noErrors}}" hint-placeholder-val="{{false}}">
+      <div role="status" style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 10px; background: #E3ECF8; color: #1F4580; font-size: 14px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M8 12.5l2.5 2.5L16 9.5"></path></svg>
+        <span style="font-weight: 600">Sample data loaded</span>
+        <span>The marked lines were replaced. Analyze again to continue.</span>
+      </div>
+    </sc-if>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+
+      <section aria-label="YAML editor" style="flex: 999 1 560px; min-width: 0; background: #FFFFFF; border: 1px solid #D6D6D2; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden">
+        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-bottom: 1px solid #E6E6E2">
+          <span style="font-size: 13px; font-weight: 500">Brand data · YAML</span>
+          <div style="display: flex; gap: 8px">
+            <button type="button" onClick="{{useSample}}" style="min-height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid #C9C9C5; background: #FFFFFF; color: #262624; font: inherit; font-size: 13px; cursor: pointer">Use sample data</button>
+            <a href="Main.dc.html" style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: 8px; color: #4A4A46; font-size: 13px; text-decoration: none">Clear</a>
+          </div>
+        </div>
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; line-height: 26px; min-height: 560px; padding: 12px 0">
+          <sc-for list="{{lines}}" as="line" hint-placeholder-count="20">
+            <div>
+              <div style="display: flex; align-items: center; height: 26px; background: {{line.bg}}; box-shadow: {{line.ring}}">
+                <div aria-hidden="true" style="width: 48px; flex-shrink: 0; box-sizing: border-box; padding-right: 12px; text-align: right; color: {{line.numColor}}; font-weight: {{line.numWeight}}">{{line.n}}</div>
+                <div style="flex-grow: 1; min-width: 0; padding-left: {{line.indent}}; display: flex; align-items: center">
+                  <div style="height: 10px; border-radius: 4px; background: {{line.barColor}}; width: {{line.w}}"></div>
+                </div>
+              </div>
+              <sc-if value="{{line.isError}}" hint-placeholder-val="{{false}}">
+                <div style="margin: 0 16px 4px 64px; padding: 6px 10px; border-radius: 6px; background: #FBE3DF; color: #7A1F12; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 12px; line-height: 18px">Line {{line.n}}, column [c] · [error message]</div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-top: 1px solid #E6E6E2; background: #FAFAF8">
+          <span style="font-size: 13px; color: #55554F">Data is checked when you analyze. Nothing is uploaded.</span>
+          <a href="ReviewGrouping.dc.html" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 22px; border-radius: 8px; background: #262624; color: #FFFFFF; font-size: 14px; font-weight: 500; text-decoration: none">Analyze again</a>
+        </div>
+      </section>
+
+      <aside style="flex: 1 1 320px; min-width: 0; background: #FFFFFF; border: 1px solid #D6D6D2; border-radius: 10px; padding: 18px; display: flex; flex-direction: column; gap: 12px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">Errors</h2>
+        <sc-if value="{{noErrors}}" hint-placeholder-val="{{false}}">
+          <p style="margin: 0; font-size: 13px; color: #3A3A36">No errors.</p>
+        </sc-if>
+        <ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px">
+          <sc-for list="{{errors}}" as="err" hint-placeholder-count="3">
+            <li>
+              <button type="button" onClick="{{err.pick}}" aria-pressed="{{err.pressed}}" style="width: 100%; min-height: 44px; text-align: left; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 8px; border: 1px solid {{err.border}}; background: #FAFAF8; color: #262624; font: inherit; cursor: pointer">
+                <span style="font-size: 13px; font-weight: 600">Line {{err.line}}, column [c]</span>
+                <span style="display: block; height: 8px; width: {{err.w}}; border-radius: 4px; background: #E2E2DE"></span>
+              </button>
+            </li>
+          </sc-for>
+        </ul>
+        <p style="margin: 0; font-size: 12px; color: #55554F">Select an error to jump to its line.</p>
+      </aside>
+
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const spec = [
+      [0, '24%'], [0, '18%'], [24, '30%'], [24, '46%'], [24, '38%'],
+      [0, '22%'], [24, '34%'], [24, '42%'], [48, '26%'], [48, '30%'], [24, '28%'],
+      [0, '16%'], [24, '24%'], [48, '18%'], [72, '40%'], [72, '40%'], [48, '36%'],
+      [0, '0%'], [0, '0%']
+    ];
+    const fixed = !!(this.state && this.state.fixed);
+    const active = (this.state && this.state.active) || 0;
+    const errorLines = fixed ? [] : [4, 10, 15];
+    const lines = spec.map((s, i) => {
+      const n = i + 1;
+      const isError = errorLines.indexOf(n) !== -1;
+      return {
+        n, isError, indent: s[0] + 'px', w: s[1],
+        bg: isError ? '#FDF0EE' : 'transparent',
+        ring: isError && n === active ? 'inset 0 0 0 2px #A3311F' : 'none',
+        numColor: isError ? '#A3311F' : '#8A8A84',
+        numWeight: isError ? '600' : '400',
+        barColor: isError ? '#EDB8AE' : '#E2E2DE'
+      };
+    });
+    const errors = fixed ? [] : [{ line: 4, w: '80%' }, { line: 10, w: '64%' }, { line: 15, w: '72%' }].map((e) => ({
+      ...e,
+      pressed: e.line === active ? 'true' : 'false',
+      border: e.line === active ? '#A3311F' : '#E6E6E2',
+      pick: () => this.setState({ active: e.line })
+    }));
+    return {
+      lines, errors, hasErrors: !fixed, noErrors: fixed,
+      useSample: () => this.setState({ fixed: true, active: 0 })
+    };
+  }
+}
+</script>
+</body>
+</html>
