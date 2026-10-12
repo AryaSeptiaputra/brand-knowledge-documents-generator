@@ -62,6 +62,14 @@ The static HTML has interactions removed. Bracketed values (`[n]`, `[BRAND NAME]
 | `skeleton.heading` | `#cfcfcb` | Heading placeholder bars in the document preview |
 | `skeleton.icon` | `#d6d6d2` | Document icon placeholders |
 
+### Focus
+
+| Token | Hex | Used for |
+|---|---|---|
+| `focus.ring` | `#6b8fc9` | Keyboard focus outline (`3px solid`, offset `2px`) on buttons, inputs, links, checkboxes, and tabs |
+
+Contrast of `focus.ring`: 3.28:1 against `bg.surface` (`#ffffff`) and 2.98:1 against `bg.page` (`#f4f4f2`). It meets the 3:1 non-text minimum on `bg.surface` but falls just below it on `bg.page`.
+
 ### Shadow
 
 | Token | Value | Used for |
@@ -116,6 +124,14 @@ Scale in use (px): `2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 28, 32, 48, 64`.
 
 Borders are `1px solid`, except the logo drop zone: `1.5px dashed #bdbdb8`.
 
+## State
+
+| Token | Value | Used for |
+|---|---|---|
+| `opacity.disabled` | `0.55` | Disabled buttons (whole element, with `cursor: not-allowed`) |
+
+Contrast of text on disabled buttons at `opacity.disabled`: primary (white on `action.primary`) 3.57:1 on `bg.surface` and 3.65:1 on `bg.page`; secondary (`text.primary` on `#ffffff`) 3.57:1 and 3.65:1; ghost (`text.tertiary`, transparent) 2.77:1 and 2.68:1. These are below 4.5:1. WCAG 1.4.3 exempts inactive controls, so the 4.5:1 rule applies to enabled controls only.
+
 ## Components and sizes
 
 | Element | Spec |
@@ -127,7 +143,7 @@ Borders are `1px solid`, except the logo drop zone: `1.5px dashed #bdbdb8`.
 | Tabs (segmented) | Track bg `bg.track`, padding `4px`, `radius.xl`; tab `min-height 40px`, padding `0 16px`, `radius.lg`; selected tab bg `#ffffff`, weight 600 |
 | Stepper pill | padding `6px 12px`, `radius.full`, 13px; active bg `action.primary`/white text, inactive bg `bg.track`/`text.tertiary` |
 | Chip | padding `3px 10px` (kind) or `4px 10px` (phase), `radius.full`, 12px, bg `bg.muted`, text `text.subtle` |
-| Checkbox | `20×20px` (grouping table), `18×18px` (toolbar toggle), `accent-color: #262624` |
+| Checkbox | `20×20px` (grouping table), `18×18px` (toolbar toggle); `radius.xs`, `1px solid` `ink` border, `bg.surface` unchecked, `ink` background with a white check mark when checked |
 | Progress bar | Height `8px`, `radius.full`, track `bg.muted`, fill `action.primary` |
 | Editor | Gutter width `48px`; text padding `12px 16px`; 13px mono, `26px` line height |
 | Logo in document header | `96×48px`, `object-fit: contain` |
@@ -158,7 +174,9 @@ export default {
         link: { DEFAULT: "#2f5fa8", hover: "#1f4580" },
         info: { bg: "#e3ecf8", fg: "#1f4580" },
         error: { bg: "#fbe3df", fg: "#7a1f12", line: "#fdf0ee", strong: "#a3311f" },
+        focus: { ring: "#6b8fc9" },
       },
+      opacity: { disabled: "0.55" },
       borderRadius: { xs: "3px", sm: "4px", md: "6px", lg: "8px", xl: "10px", "2xl": "12px" },
       maxWidth: { content: "1376px", page: "640px" },
       boxShadow: { page: "0 1px 3px rgb(0 0 0 / 0.12)", toast: "0 4px 16px rgb(0 0 0 / 0.18)" },

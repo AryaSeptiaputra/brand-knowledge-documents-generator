@@ -7,6 +7,7 @@ import {
   type GroupingEntry,
 } from "../../api/client";
 import { Button } from "../../components/ui/Button";
+import { Checkbox } from "../../components/ui/Checkbox";
 
 function kindLabel(entry: GroupingEntry): string {
   if (entry.unit_kind === "PRODUCT_SIZE") return "Product size";
@@ -90,12 +91,13 @@ export function GroupingReview({
                     </td>
                     {documentTypes.map((type) => (
                       <td className="center checkbox-cell" key={type}>
-                        <input
+                        <Checkbox
                           aria-label={`Include ${entry.section} in ${documentLabels[type]}`}
                           checked={entry.document_types.includes(type)}
                           disabled={busy}
-                          onChange={(event) => onToggle(entry.section, type, event.target.checked)}
-                          type="checkbox"
+                          onCheckedChange={(checked) =>
+                            onToggle(entry.section, type, checked === true)
+                          }
                         />
                       </td>
                     ))}

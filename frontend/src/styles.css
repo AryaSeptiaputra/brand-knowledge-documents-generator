@@ -24,7 +24,7 @@ input {
 button:focus-visible,
 input:focus-visible,
 a:focus-visible {
-  outline: 3px solid #6b8fc9;
+  outline: 3px solid theme("colors.focus.ring");
   outline-offset: 2px;
 }
 .app-shell {
@@ -214,45 +214,6 @@ code {
   align-items: center;
   gap: 8px;
 }
-.button {
-  display: inline-flex;
-  min-height: 44px;
-  align-items: center;
-  justify-content: center;
-  padding: 0 16px;
-  border: 1px solid #c9c9c5;
-  border-radius: 8px;
-  background: #fff;
-  color: #262624;
-  font-size: 14px;
-  cursor: pointer;
-  transition:
-    background-color 120ms ease,
-    border-color 120ms ease;
-}
-.button:hover:not(:disabled) {
-  background: #f7f7f5;
-}
-.button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-.button-primary {
-  padding-right: 22px;
-  padding-left: 22px;
-  border-color: #262624;
-  background: #262624;
-  color: #fff;
-  font-weight: 500;
-}
-.button-primary:hover:not(:disabled) {
-  background: #3a3a36;
-}
-.button-ghost {
-  border-color: transparent;
-  background: transparent;
-  color: #4a4a46;
-}
 .small-button {
   min-height: 36px;
   padding: 0 14px;
@@ -403,17 +364,6 @@ thead th {
 }
 .checkbox-cell {
   padding: 6px 16px;
-}
-.checkbox-cell input,
-.source-toggle input {
-  width: 20px;
-  height: 20px;
-  accent-color: #262624;
-  cursor: pointer;
-  vertical-align: middle;
-}
-.checkbox-cell input:disabled {
-  cursor: wait;
 }
 .suggestions-card {
   flex: 1 1 300px;
@@ -580,29 +530,6 @@ thead th {
   justify-content: space-between;
   gap: 12px;
 }
-.tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 10px;
-  background: #e6e6e2;
-}
-.tab {
-  min-height: 40px;
-  padding: 0 16px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: #3a3a36;
-  cursor: pointer;
-  font-size: 14px;
-}
-.tab.selected {
-  background: #fff;
-  color: #262624;
-  font-weight: 600;
-}
 .preview-actions {
   gap: 8px;
 }
@@ -616,10 +543,6 @@ thead th {
   min-height: 44px;
   cursor: pointer;
   font-size: 13px;
-}
-.source-toggle input {
-  width: 18px;
-  height: 18px;
 }
 .preview-columns {
   gap: 20px;

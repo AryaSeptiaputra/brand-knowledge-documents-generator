@@ -8,6 +8,8 @@ import {
   fetchPreview,
 } from "../../api/client";
 import { Button } from "../../components/ui/Button";
+import { Checkbox } from "../../components/ui/Checkbox";
+import { Tabs, TabsList, TabsTrigger } from "../../components/ui/Tabs";
 import { useLogo } from "./useLogo";
 
 export function PreviewScreen({
@@ -62,26 +64,25 @@ export function PreviewScreen({
   return (
     <main className="main-content preview-main">
       <div className="preview-toolbar">
-        <div aria-label="Document type" className="tabs" role="tablist">
-          {types.map((type) => (
-            <button
-              aria-selected={selectedType === type}
-              className={selectedType === type ? "tab selected" : "tab"}
-              key={type}
-              onClick={() => setSelectedType(type)}
-              role="tab"
-              type="button"
-            >
-              {documentLabels[type]}
-            </button>
-          ))}
-        </div>
+        <Tabs
+          onValueChange={(value) => setSelectedType(value as DocumentType)}
+          value={selectedType}
+        >
+          <TabsList aria-label="Document type">
+            {types.map((type) => (
+              <TabsTrigger key={type} value={type}>
+                {documentLabels[type]}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
         <div className="preview-actions">
-          <label className="source-toggle">
-            <input
+          <label className="source-toggle" htmlFor="show-source-references">
+            <Checkbox
               checked={showSources}
-              onChange={(event) => setShowSources(event.target.checked)}
-              type="checkbox"
+              className="size-4.5"
+              id="show-source-references"
+              onCheckedChange={(checked) => setShowSources(checked === true)}
             />
             Show source references
           </label>
