@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>{{ document.title }}</title>
+  <meta name="author" content="{{ document.brand_name }}">
+  <meta name="description" content="{{ document.document_type.value }}">
+  <meta name="dcterms.created" content="{{ document.generated_at.isoformat() }}">
+  {#- Colors and sizes follow docs/design/ui-ux/tokens.md and html/04-preview-and-download.html. No external fonts: the stack falls back to system fonts. #}
+  <style>
+    html, body { margin: 0; }
+    body { font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #262624; background: #ffffff; font-size: 13px; line-height: 20px; }
+    body.preview-mode { padding: 48px 52px; }
+    .doc-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-bottom: 18px; border-bottom: 1px solid #e6e6e2; margin-bottom: 26px; }
+    .doc-heading { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+    .doc-meta { font-size: 12px; line-height: normal; color: #55554f; }
+    h1 { margin: 0; font-size: 20px; line-height: normal; font-weight: 600; }
+    .brand-logo { width: 96px; height: 48px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+    .brand-logo img { max-width: 96px; max-height: 48px; object-fit: contain; }
+    body.pdf-mode .brand-logo { position: running(brand-logo); }
+    section { margin-bottom: 26px; }
+    h2 { margin: 0 0 10px; font-size: 16px; line-height: normal; font-weight: 600; }
+    h3 { margin: 12px 0 6px; font-size: 13px; font-weight: 600; }
+    p { margin: 0 0 6px; }
+    ul, dl { margin: 0 0 6px; } ul { padding-left: 20px; } dt { font-weight: 600; } dd { margin: 0 0 2px 16px; }
+    table { border-collapse: collapse; width: 100%; margin: 6px 0; }
+    th, td { border: 1px solid #d6d6d2; padding: 6px 8px; text-align: left; }
+    .sources { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 2px; margin-bottom: 10px; }
+    .source { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; line-height: normal; padding: 2px 8px; border-radius: 4px; background: #e3ecf8; color: #1f4580; }
+    .preview-note { margin: 0; padding-top: 12px; border-top: 1px solid #e6e6e2; font-size: 12px; line-height: normal; color: #55554f; }
+    .suggestions { display: none; }
+    @page { margin: 18mm; @top-right { content: element(brand-logo); } }
+  </style>
+</head>
+<body class="{% if show_sources %}preview-mode{% else %}pdf-mode{% endif %}">
+<header class="doc-header">
+  <div class="doc-heading">
+    <span class="doc-meta">{{ document.brand_name }} · {{ type_label }} · {{ generated_on }}</span>
+    <h1>{{ document.title }}</h1>
+  </div>
+  {% if logo_data %}<div class="brand-logo"><img alt="{{ document.brand_name }} logo" src="data:{{ logo.media_type }};base64,{{ logo_data }}"></div>{% endif %}
+</header>
+{% for section in document.sections %}
+<section><h2>{{ section.heading }}</h2>
+  {% for paragraph in section.paragraphs %}<p>{{ paragraph.text }}</p>
+    {% if show_sources and paragraph.origin.value == 'LLM' %}<div class="sources">{% for source in paragraph.sources %}<span class="source">{{ source.fact_path }} · L{{ source.line }}</span>{% endfor %}</div>{% endif %}
+  {% endfor %}
+  {% for block in section_blocks[section.order] %}
+    {% if block.kind == 'table' %}
+      <h3>{{ block.caption | humanize_key }}</h3><table><thead><tr><th>{{ block.row_heading }}</th>{% for heading in block.headings %}<th>{{ heading | humanize_key }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for row in block.rows %}<tr><th>{{ row.label }}</th>{% for value in row["values"] %}<td>{{ value }}</td>{% endfor %}</tr>{% endfor %}</tbody></table>
+    {% elif block.kind == 'list' %}
+      <h3>{{ block.label | humanize_key }}</h3><ul>{% for item in block["items"] %}<li>{{ item }}</li>{% endfor %}</ul>
+    {% elif block.kind == 'definition' %}
+      <h3>{{ block.label | humanize_key }}</h3><dl>{% for item in block.definitions %}<dt>{{ item.label | humanize_key }}</dt><dd>{{ item.value }}</dd>{% endfor %}</dl>
+    {% elif document.document_type.value == 'PRODUCT_KNOWLEDGE' %}
+      <h3>{{ block.label | humanize_key }}</h3><p>{{ block.value }}</p>
+    {% else %}<p><strong>{{ block.label | humanize_key }}:</strong> {{ block.value }}</p>{% endif %}
+    {% if show_sources %}<div class="sources">{% for label in block.source_labels %}<span class="source">{{ label }}</span>{% endfor %}</div>{% endif %}
+  {% endfor %}
+</section>
+{% endfor %}
+{% if show_sources %}<p class="preview-note">Paragraphs with source chips are written by the model from the cited facts. Headings, lists and tables come from the template. Source references appear only in this preview, never in the PDF.</p>{% endif %}
+</body>
+</html>

@@ -38,7 +38,7 @@ brand-knowledge-document-generator/
 │  │  ├─ factory.py      build_*/create_* functions that wire services and the SessionStore
 │  │  ├─ utils/
 │  │  │  ├─ logger.py    setup_logger(name)
-│  │  │  └─ text.py      humanize_key, format_fact_sentence (§9.3)
+│  │  │  └─ text.py      humanize_key (§9.3)
 │  │  ├─ api/
 │  │  │  ├─ router.py    ApiRouter: all endpoints
 │  │  │  └─ schemas.py   request/response DTOs (AnalyzeRequest, AnalyzeResponse, …)
@@ -118,7 +118,7 @@ Endpoints (all under `/api`), matching the per-module sequence diagram:
 
 ## 6. Sessions and logo
 
-- `SessionStore` is in-memory with a TTL (default 60 minutes, from `Settings`). No database, no session files on disk. Its instance is created in `factory.py` and injected.
+- `SessionStore` is in-memory with a sliding TTL (default 60 minutes, from `Settings`): every successful `get` refreshes the last-access time, and a session is removed once it has not been accessed for the TTL. There is no absolute maximum lifetime. No database, no session files on disk. Its instance is created in `factory.py` and injected.
 - The logo is stored as a `BrandLogo` inside the `Session` (bytes in memory). Size limit from `Settings.max_logo_bytes`; only PNG, JPEG, and SVG are accepted — check the file content, not just the extension. SVGs are sanitized (remove `<script>`, `on*` attributes, external references) before use.
 - The logo is uploaded on the Preview & download screen, applies to all documents, and needs no re-generation.
 
@@ -136,11 +136,11 @@ Roles are defined in `coding-rules.md` §2.2. Applied to the design classes:
 |---|---|---|
 | `ApiRouter.analyze`, `.generate`, … | Entry point | — |
 | `DataValidator.validate`, `FactExtractor.extract`, `DocumentGrouper.propose`, `CompletenessAdvisor.suggest`, `DocumentComposer.compose`, `ContentChecker.check`, `HtmlRenderer.render` | Process | — |
-| `DocumentComposer._compose_section`, `._build_prompt`, `._fallback_section`; `ContentChecker._verify`, `._cover`; `DocumentGrouper._units`, `._classify` | Sub-process | — |
+| `DocumentComposer._compose_section`, `._build_prompt`, `._fallback_section`; `ContentChecker._verify`; `DocumentGrouper._units`, `._classify` | Sub-process | — |
 | `OllamaClient.generate` | — | External accessor (model) |
 | `PdfRenderer.render`, `.render_all` | Process | Calls WeasyPrint only through `_write_pdf` (external accessor) |
 | `DataValidator.validate_logo` | — | Checker |
-| `utils.text.humanize_key`, `format_fact_sentence` | — | Shape converter |
+| `utils.text.humanize_key` | — | Shape converter |
 
 **Protocol exception:** `LlmClient` is a `Protocol` with one production implementation (`OllamaClient`). It is kept because the PRD requires an adapter so the model runner can be replaced.
 
@@ -189,7 +189,7 @@ A unit with no document type selected by the user is allowed; its facts are repo
 - The LLM writes only **one to three short explanatory paragraphs per section** (`origin = LLM`), placed before the template blocks, in Indonesian, formal-friendly, addressing the reader as "Anda". It must not add steps, conditions, numbers, names, or promises that are not in the facts, and must not repeat the whole table in prose.
 - Prompt template (`llm/prompts/section.j2`) must contain: the brand name, the document type and its purpose, the section heading, the facts as `path = value` lines, the rules above, and the instruction to return `ComposedSection` JSON with `source_paths` for every paragraph (paths copied exactly from the given list).
 - `OllamaClient` passes the JSON Schema of `ComposedSection` in the `format` parameter and validates the result with Pydantic; invalid output raises `LlmOutputError`. `DocumentComposer` retries up to `max_retries`, then falls back.
-- Fallback (`_fallback_section`, `origin = TEMPLATE`): one sentence per fact from `format_fact_sentence` — `"{Label}: {value}."`, label = humanized last key, lists joined with `, `. Used when `use_llm = false`, after retries fail, or when the checker rejects a paragraph.
+- Fallback (`_fallback_section`): the section keeps its heading and `Section.facts` but gets **no paragraphs**; the template blocks show every fact, so no fact appears twice. Used when `use_llm = false` and after retries fail. A paragraph rejected by the checker is removed the same way (§9.4).
 - Model, host, temperature, and `num_ctx` come only from `Settings`. Prompts live in `llm/prompts/*.j2`, not as long strings in code.
 - **No-model mode** (`BKDG_USE_LLM=false`): the whole application must still run using the fallback. Used for local development and tests.
 
@@ -199,10 +199,10 @@ A paragraph with `origin = LLM` is **rejected** when any of these holds:
 2. It contains a number not present in the values of its source facts. Normalize before comparing: strip thousand separators (`300.000`, `300,000` → `300000`), expand `ribu`/`rb`/`k` (×1 000) and `juta`/`jt` (×1 000 000), and treat ranges (`2-3`, `2–3`, `2 sampai 3`) as their individual numbers. The digits of the document date and of numbered-list markers are ignored.
 3. It contains a proper term not present (case-insensitive) in its source facts' values or keys, the brand name, or the document title. A proper term is a word that starts upper-case and is not the first word of a sentence, or a token containing `&` or mixing letters and digits (`J&T`, `24s`). An allow-list constant covers common words (`Anda`, `Rp`, document type names).
 
-Rejected paragraphs are replaced by fallback sentences for their source facts and listed in `CheckResult.replaced_paragraphs` — never silently dropped. Then a **coverage pass** runs: every fact mapped to the document that is not cited by any paragraph and not shown in a template block gets a fallback sentence appended to its section. `coverage_percent` is computed before this pass (it measures the LLM), over the facts mapped to that document; `uncovered_facts` lists the facts that needed the pass.
+Rejected paragraphs are removed from the document — no replacement sentence is added, because the section's template blocks already show all of its facts — and their text is listed in `CheckResult.replaced_paragraphs` with `fabrication_found = true`, so they are never silently dropped. There is no coverage pass: every fact mapped to a document is rendered by a template block. `coverage_percent` measures the LLM: the share of facts mapped to that document that are cited by an accepted LLM paragraph. `uncovered_facts` stays in the contract and is empty.
 
 ### 9.5 Rendering and PDF
-- One Jinja2 template for both preview and PDF; `humanize_key` and `format_fact_sentence` are registered as template filters.
+- One Jinja2 template for both preview and PDF; `humanize_key` is registered as a template filter.
 - **Source references** are rendered only in the preview (template flag), **never** in the PDF. In the preview, every LLM paragraph shows its `source_paths`, and every template block (table, list, `label: value`) shows the path of the fact it renders with its line, `path · L{line}`; a table shows the line range, e.g. `product.kaos boxy.size · L12–14`.
 - Completeness suggestions **never** appear in documents.
 - RAG-friendly PDF (PRD F8): real text, heading hierarchy `h1`→`h2`→`h3` without skipping levels, one topic per section, tables as text `<table>`, PDF metadata (title, author = brand name, subject = document type, date).
