@@ -35,6 +35,9 @@ class GenerateRequest(BaseModel):
 class GenerateResponse(BaseModel):
     documents: list[Document]
     check_results: list[CheckResult]
+    model_used: bool = Field(
+        description="False when documents come from templates only; coverage is not measured."
+    )
 
 
 class LogoInfo(BaseModel):

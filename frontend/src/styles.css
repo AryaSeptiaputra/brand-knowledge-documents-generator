@@ -559,12 +559,20 @@ thead th {
   background: #e6e6e2;
 }
 .document-frame {
+  display: block;
   width: 100%;
   max-width: 640px;
-  min-height: 850px;
+  min-height: 780px;
   border: 0;
-  background: white;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 12%);
+  overflow: hidden;
+  background: theme("colors.surface");
+  box-shadow: theme("boxShadow.page");
+}
+.not-measured {
+  display: block;
+  color: theme("colors.ink.secondary");
+  font-size: theme("fontSize.small");
+  font-weight: 500;
 }
 .preview-loading {
   padding: 28px;
@@ -717,9 +725,6 @@ thead th {
   .preview-canvas {
     min-height: 600px;
     padding: 14px;
-  }
-  .document-frame {
-    min-height: 700px;
   }
   .page-actions {
     align-items: stretch;

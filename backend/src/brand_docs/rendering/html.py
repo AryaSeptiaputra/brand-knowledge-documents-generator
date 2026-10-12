@@ -6,11 +6,17 @@ from typing import TypedDict
 
 from jinja2 import Environment, PackageLoader
 
+from brand_docs.domain.enums import DocumentType
 from brand_docs.domain.models import BrandLogo, Document, Fact
 from brand_docs.utils.logger import setup_logger
 from brand_docs.utils.text import humanize_key
 
 logger = setup_logger(__name__)
+DOCUMENT_TYPE_LABELS = {
+    DocumentType.POLICY: "Policy",
+    DocumentType.GUIDE: "Guide",
+    DocumentType.PRODUCT_KNOWLEDGE: "Product Knowledge",
+}
 
 
 class RenderRow(TypedDict):
@@ -33,7 +39,7 @@ class RenderBlock(TypedDict):
     headings: list[str]
     rows: list[RenderRow]
     definitions: list[RenderDefinition]
-    source_label: str
+    source_labels: list[str]
 
 
 class HtmlRenderer:
@@ -101,7 +107,7 @@ class HtmlRenderer:
             "headings": headings,
             "rows": rows,
             "definitions": [],
-            "source_label": f"{parent} \u00b7 L{min(lines)}\u2013{max(lines)}",
+            "source_labels": [f"{parent} \u00b7 L{min(lines)}\u2013{max(lines)}"],
         }
 
     @staticmethod
@@ -136,7 +142,7 @@ class HtmlRenderer:
             "headings": [],
             "rows": [],
             "definitions": definitions,
-            "source_label": "; ".join(source_labels),
+            "source_labels": source_labels,
         }
 
     @staticmethod
@@ -153,7 +159,7 @@ class HtmlRenderer:
                 "headings": [],
                 "rows": [],
                 "definitions": [],
-                "source_label": f"{fact.path} \u00b7 L{fact.line}",
+                "source_labels": [f"{fact.path} \u00b7 L{fact.line}"],
             }
         value = "null" if fact.value is None else str(fact.value)
         return {
@@ -166,7 +172,7 @@ class HtmlRenderer:
             "headings": [],
             "rows": [],
             "definitions": [],
-            "source_label": f"{fact.path} \u00b7 L{fact.line}",
+            "source_labels": [f"{fact.path} \u00b7 L{fact.line}"],
         }
 
     def _blocks(self, facts: list[Fact], source_section: str) -> list[RenderBlock]:
@@ -224,4 +230,7 @@ class HtmlRenderer:
             logo_data=logo_data,
             show_sources=show_sources,
             section_blocks=section_blocks,
+            type_label=DOCUMENT_TYPE_LABELS[doc.document_type],
+            # Example: 2026-10-12
+            generated_on=doc.generated_at.strftime("%Y-%m-%d"),
         )

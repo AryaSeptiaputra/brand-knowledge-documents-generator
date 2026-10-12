@@ -14,7 +14,7 @@ Upload limits are configurable: `BKDG_MAX_LOGO_BYTES` (logo size), `BKDG_MAX_YAM
 
 ## PDF export on Windows (GTK)
 
-WeasyPrint needs the Pango/GTK libraries to create PDFs. It is imported only when a PDF is requested, so the server, the preview, and the tests run without them; without GTK the PDF endpoints return a 500 error with `Unable to render the requested PDF.`
+WeasyPrint needs the Pango/GTK libraries to create PDFs. It is imported only when a PDF is requested, so the server, the preview, and the tests run without them; without GTK the PDF endpoints return a 503 error with `PDF download is not available because the PDF component is not installed on the server.`
 
 1. Install [MSYS2](https://www.msys2.org/) with the default path `C:\msys64`.
 2. In the MSYS2 shell, install Pango:

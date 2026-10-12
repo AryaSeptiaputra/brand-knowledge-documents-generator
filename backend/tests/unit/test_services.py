@@ -24,6 +24,7 @@ from brand_docs.errors import (
     InvalidLogoError,
     LlmOutputError,
     LlmUnavailableError,
+    PdfEngineUnavailableError,
     PdfRenderError,
     SessionNotFoundError,
 )
@@ -1085,8 +1086,86 @@ def test_pdf_renderer_maps_missing_weasyprint(monkeypatch: pytest.MonkeyPatch) -
     # A None entry makes "from weasyprint import HTML" raise ImportError, as without GTK.
     monkeypatch.setitem(sys.modules, "weasyprint", None)
 
-    with pytest.raises(PdfRenderError):
+    with pytest.raises(PdfEngineUnavailableError, match="PDF component is not installed"):
         PdfRenderer(HtmlRenderer()).render(document)
+
+
+def test_pdf_write_failure_is_not_reported_as_missing_engine(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FailingPdfHtml:
+        def __init__(self, string: str) -> None:
+            self.string = string
+
+        def write_pdf(self) -> bytes:
+            raise ValueError("Invalid generated HTML.")
+
+    document = Document(document_type=DocumentType.POLICY, title="Kebijakan", brand_name="Contoh")
+    monkeypatch.setitem(sys.modules, "weasyprint", SimpleNamespace(HTML=FailingPdfHtml))
+
+    with pytest.raises(PdfRenderError) as raised:
+        PdfRenderer(HtmlRenderer()).render(document)
+
+    assert not isinstance(raised.value, PdfEngineUnavailableError)
+    assert str(raised.value) == "Unable to render the requested PDF."
+
+
+def _llm_document() -> Document:
+    return Document(
+        document_type=DocumentType.POLICY,
+        title="Kebijakan Contoh",
+        brand_name="Contoh",
+        generated_at=datetime(2026, 10, 12, tzinfo=UTC),
+        sections=[
+            Section(
+                heading="Retur",
+                order=0,
+                source_section="retur",
+                facts=[
+                    Fact(
+                        path="retur.batas_hari",
+                        value=7,
+                        data_kind=DataKind.GENERAL_BRAND,
+                        line=3,
+                    )
+                ],
+                paragraphs=[
+                    Paragraph(
+                        text="Retur dalam 7 hari.",
+                        origin=ParagraphOrigin.LLM,
+                        sources=[SourceReference(fact_path="retur.batas_hari", line=3)],
+                    )
+                ],
+            )
+        ],
+    )
+
+
+def test_renderer_writes_document_header_meta_and_title() -> None:
+    html = HtmlRenderer().render(_llm_document(), show_sources=True)
+
+    assert '<span class="doc-meta">Contoh · Policy · 2026-10-12</span>' in html
+    assert "<h1>Kebijakan Contoh</h1>" in html
+    assert 'class="doc-header"' in html
+
+
+def test_preview_shows_source_chips_and_preview_note() -> None:
+    html = HtmlRenderer().render(_llm_document(), show_sources=True)
+
+    assert '<span class="source">retur.batas_hari · L3</span>' in html
+    assert html.count('<span class="source">') == 2
+    assert 'class="preview-note"' in html
+    assert 'class="preview-mode"' in html
+
+
+def test_pdf_html_has_no_source_chips_or_preview_note() -> None:
+    html = HtmlRenderer().render(_llm_document(), show_sources=False)
+
+    assert 'class="source"' not in html
+    assert "retur.batas_hari · L3" not in html
+    assert 'class="preview-note"' not in html
+    assert 'class="pdf-mode"' in html
+    assert "<h1>Kebijakan Contoh</h1>" in html
 
 
 def test_renderer_tables_general_mapping_of_mappings() -> None:

@@ -207,6 +207,11 @@ export interface components {
       documents: components["schemas"]["Document"][];
       /** Check Results */
       check_results: components["schemas"]["CheckResult"][];
+      /**
+       * Model Used
+       * @description False when documents come from templates only; coverage is not measured.
+       */
+      model_used: boolean;
     };
     /** Grouping */
     Grouping: {
@@ -514,6 +519,15 @@ export interface operations {
       };
       /** @description The document could not be rendered. */
       500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description The PDF component is not installed on the server. */
+      503: {
         headers: {
           [name: string]: unknown;
         };

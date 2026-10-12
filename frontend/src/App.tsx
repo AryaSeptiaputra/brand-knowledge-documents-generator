@@ -184,6 +184,7 @@ export function App() {
         generated && (
           <PreviewScreen
             checks={generated.check_results}
+            modelUsed={generated.model_used}
             onError={showError}
             onFixData={goBackToData}
             sessionId={session.session_id}

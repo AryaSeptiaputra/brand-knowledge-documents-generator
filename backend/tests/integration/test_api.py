@@ -2,6 +2,7 @@
 
 import asyncio
 import struct
+import sys
 import tempfile
 import zlib
 
@@ -317,3 +318,35 @@ def test_unknown_api_path_returns_json_404_when_frontend_is_served(
     assert missing.json() == {"errors": [{"message": "API endpoint not found."}]}
     assert page.status_code == 200
     assert "app" in page.text
+
+
+def test_generate_reports_that_no_model_was_used() -> None:
+    app = create_app(Settings(use_llm=False))
+    with TestClient(app) as client:
+        session_id = _analyze_session(client)
+        response = client.post("/api/documents", json={"session_id": session_id})
+
+    assert response.status_code == 200
+    assert response.json()["model_used"] is False
+
+
+def test_pdf_download_without_pdf_engine_returns_clear_503(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A None entry makes "from weasyprint import HTML" raise ImportError, as without GTK.
+    monkeypatch.setitem(sys.modules, "weasyprint", None)
+    app = create_app(Settings(use_llm=False))
+    with TestClient(app) as client:
+        session_id = _analyze_session(client)
+        client.post("/api/documents", json={"session_id": session_id})
+        response = client.get("/api/documents/POLICY/pdf", params={"session_id": session_id})
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "errors": [
+            {
+                "message": "PDF download is not available because the PDF component is not "
+                "installed on the server."
+            }
+        ]
+    }

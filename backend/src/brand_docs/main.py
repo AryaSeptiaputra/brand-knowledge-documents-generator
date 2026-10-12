@@ -10,6 +10,7 @@ from brand_docs.api.router import ApiRouter
 from brand_docs.errors import (
     BrandDocsError,
     InvalidLogoError,
+    PdfEngineUnavailableError,
     PdfRenderError,
     SessionNotFoundError,
     UnknownDocumentTypeError,
@@ -53,6 +54,10 @@ def _pdf_error(_: Request, error: Exception) -> JSONResponse:
     return JSONResponse(status_code=500, content={"errors": [{"message": str(error)}]})
 
 
+def _pdf_engine_unavailable(_: Request, error: Exception) -> JSONResponse:
+    return JSONResponse(status_code=503, content={"errors": [{"message": str(error)}]})
+
+
 def _application_error(_: Request, error: Exception) -> JSONResponse:
     logger.error("Unhandled project error", exc_info=True)
     return JSONResponse(
@@ -68,6 +73,7 @@ def _register_error_handlers(application: FastAPI) -> None:
     application.add_exception_handler(YamlValidationError, _invalid_data)
     application.add_exception_handler(RequestValidationError, _invalid_request)
     application.add_exception_handler(InvalidLogoError, _invalid_logo)
+    application.add_exception_handler(PdfEngineUnavailableError, _pdf_engine_unavailable)
     application.add_exception_handler(PdfRenderError, _pdf_error)
     application.add_exception_handler(BrandDocsError, _application_error)
 

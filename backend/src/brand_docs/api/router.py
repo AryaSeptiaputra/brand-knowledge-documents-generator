@@ -42,6 +42,10 @@ GROUPING_ERROR = {
     "description": "The submitted grouping change is invalid or names an unknown section.",
 }
 PDF_ERROR = {"model": ErrorResponse, "description": "The document could not be rendered."}
+PDF_ENGINE_ERROR = {
+    "model": ErrorResponse,
+    "description": "The PDF component is not installed on the server.",
+}
 PDF_CONTENT = {"schema": {"type": "string", "format": "binary"}}
 LOGO_REQUEST_BODY = {
     "required": True,
@@ -130,6 +134,7 @@ class ApiRouter:
                 404: DOCUMENT_ERROR,
                 422: VALIDATION_ERROR,
                 500: PDF_ERROR,
+                503: PDF_ENGINE_ERROR,
             },
         )
 
@@ -203,7 +208,11 @@ class ApiRouter:
         ]
         session.documents = [item[0] for item in checked_results]
         session.check_results = [item[1] for item in checked_results]
-        return GenerateResponse(documents=session.documents, check_results=session.check_results)
+        return GenerateResponse(
+            documents=session.documents,
+            check_results=session.check_results,
+            model_used=services.settings.use_llm,
+        )
 
     @staticmethod
     def _find_document(session: Session, doc_type: str) -> Document:

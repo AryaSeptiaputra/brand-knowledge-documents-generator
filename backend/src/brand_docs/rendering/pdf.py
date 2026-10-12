@@ -4,7 +4,7 @@ import io
 import zipfile
 
 from brand_docs.domain.models import BrandLogo, Document, PdfFile
-from brand_docs.errors import PdfRenderError
+from brand_docs.errors import PdfEngineUnavailableError, PdfRenderError
 from brand_docs.rendering.html import HtmlRenderer
 from brand_docs.utils.logger import setup_logger
 
@@ -21,9 +21,15 @@ class PdfRenderer:
         try:
             # Imported on use so the app and tests start without the GTK libraries WeasyPrint needs.
             from weasyprint import HTML
-
+        except (ImportError, OSError) as error:
+            logger.error("PDF engine could not be loaded", exc_info=True)
+            raise PdfEngineUnavailableError(
+                "PDF download is not available because the PDF component is not installed "
+                "on the server."
+            ) from error
+        try:
             content = HTML(string=html).write_pdf()
-        except (ImportError, OSError, ValueError) as error:
+        except (OSError, ValueError) as error:
             logger.error("PDF rendering failed", exc_info=True)
             raise PdfRenderError("Unable to render the requested PDF.") from error
         if not isinstance(content, bytes):

@@ -16,12 +16,14 @@ export function PreviewScreen({
   sessionId,
   types,
   checks,
+  modelUsed,
   onFixData,
   onError,
 }: {
   sessionId: string;
   types: DocumentType[];
   checks: CheckResult[];
+  modelUsed: boolean;
   onFixData: () => void;
   onError: (message: string) => void;
 }) {
@@ -119,6 +121,7 @@ export function PreviewScreen({
             <iframe
               className="document-frame"
               key={`${selectedType}-${previewQuery.data}`}
+              onLoad={(event) => fitFrameToContent(event.currentTarget)}
               sandbox="allow-same-origin"
               title={`${documentLabels[selectedType]} document preview`}
               srcDoc={showSources ? previewQuery.data : hideSourceReferences(previewQuery.data)}
@@ -193,7 +196,13 @@ export function PreviewScreen({
                 <dl className="check-grid">
                   <div>
                     <dt>Data coverage</dt>
-                    <dd>{Math.round(check.coverage_percent)}%</dd>
+                    <dd>
+                      {modelUsed ? (
+                        `${Math.round(check.coverage_percent)}%`
+                      ) : (
+                        <span className="not-measured">Not measured · no model</span>
+                      )}
+                    </dd>
                   </div>
                   <div>
                     <dt>Made-up content</dt>
@@ -250,5 +259,14 @@ function formatBytes(bytes: number): string {
 }
 
 function hideSourceReferences(html: string): string {
-  return html.replace("</head>", "<style>.source{display:none!important}</style></head>");
+  return html.replace(
+    "</head>",
+    "<style>.sources{display:none!important}.source{display:none!important}</style></head>",
+  );
+}
+
+// The document grows with its content, so the page scrolls instead of the frame.
+export function fitFrameToContent(frame: HTMLIFrameElement): void {
+  const root = frame.contentDocument?.documentElement;
+  if (root) frame.style.height = `${root.scrollHeight}px`;
 }

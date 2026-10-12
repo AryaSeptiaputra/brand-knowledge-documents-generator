@@ -41,3 +41,7 @@ class LlmOutputError(BrandDocsError):
 
 class PdfRenderError(BrandDocsError):
     """HTML could not be rendered as a PDF."""
+
+
+class PdfEngineUnavailableError(PdfRenderError):
+    """The PDF engine or its system libraries are not installed on the server."""

@@ -29,6 +29,7 @@ function documentOf(type: "POLICY" | "GUIDE" | "PRODUCT_KNOWLEDGE") {
 
 const generated = {
   documents: [documentOf("POLICY")],
+  model_used: true,
   check_results: [
     {
       document_type: "POLICY" as const,
@@ -219,6 +220,7 @@ describe("App workflow", () => {
         response({
           documents: [documentOf("GUIDE")],
           check_results: [{ ...generated.check_results[0], document_type: "GUIDE" as const }],
+          model_used: true,
         }),
       ) as never;
     });
@@ -270,6 +272,58 @@ describe("App workflow", () => {
     fireEvent.click(await screen.findByRole("checkbox", { name: "Include retur in Guide" }));
     expect(
       await screen.findByText("Your session expired. Submit your data again."),
+    ).toBeInTheDocument();
+  });
+
+  it("shows coverage as not measured when no model was used", async () => {
+    vi.mocked(api.POST).mockImplementation((path) => {
+      if (path === "/api/analyze") return Promise.resolve(response(analyzed)) as never;
+      return Promise.resolve(
+        response({
+          ...generated,
+          model_used: false,
+          check_results: [{ ...generated.check_results[0], coverage_percent: 0 }],
+        }),
+      ) as never;
+    });
+    renderApp();
+    fireEvent.click(screen.getByRole("button", { name: "Use sample data" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check data and continue" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Generate documents" }));
+
+    expect(await screen.findByText("Not measured · no model")).toBeInTheDocument();
+    expect(screen.queryByText("0%")).not.toBeInTheDocument();
+  });
+
+  it("shows the server message when the PDF component is missing", async () => {
+    vi.mocked(fetch).mockImplementation(async (input) => {
+      const url = requestUrl(input as Request | string);
+      if (url.includes("/pdf?"))
+        return new Response(
+          JSON.stringify({
+            errors: [
+              {
+                message:
+                  "PDF download is not available because the PDF component is not installed on the server.",
+              },
+            ],
+          }),
+          { status: 503, headers: { "Content-Type": "application/json" } },
+        );
+      return new Response("<html><head></head><body></body></html>", {
+        headers: { "Content-Type": "text/html" },
+      });
+    });
+    renderApp();
+    fireEvent.click(screen.getByRole("button", { name: "Use sample data" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check data and continue" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Generate documents" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Download PDF" }));
+
+    expect(
+      await screen.findByText(
+        "PDF download is not available because the PDF component is not installed on the server.",
+      ),
     ).toBeInTheDocument();
   });
 });
